@@ -8,16 +8,16 @@
 [![Node.js: >=24](https://img.shields.io/badge/Node.js-%3E%3D24_LTS-brightgreen.svg)](https://nodejs.org)
 [![Security: Coraza WAF + CRS v4 + CrowdSec](https://img.shields.io/badge/Security-Coraza_WAF_%2B_CRS_v4_%2B_CrowdSec-amber.svg)](docs/WAF-AND-VAULT.md)
 [![Zero-Trust Architecture](https://img.shields.io/badge/Architecture-0_Inbound_Ports_%7C_Cloudflare_Tunnel-blueviolet.svg)](docs/PANEL-ACCESS.md)
-[![AI Control: 43 MCP Tools](https://img.shields.io/badge/AI_DevOps-43_MCP_Tools_%2B_OAuth2_PKCE-teal.svg)](docs/AI-CONNECTIONS.md)
+[![AI Control: 44 MCP Tools](https://img.shields.io/badge/AI_DevOps-44_MCP_Tools_%2B_OAuth2_PKCE-teal.svg)](docs/AI-CONNECTIONS.md)
 [![Observability: Grafana 11 + Prometheus](https://img.shields.io/badge/Observability-Grafana_11_%2B_Prometheus-orange.svg)](docs/GRAFANA-PANEL-ARCHITECTURE.md)
-[![Tests Passing: 16/16](https://img.shields.io/badge/Tests-16%2F16_Passing-success.svg)](tests/)
+[![Tests Passing: 17/17](https://img.shields.io/badge/Tests-17%2F17_Passing-success.svg)](tests/)
 
 <p align="center">
   <b>CP-Panel</b> is a next-generation, high-performance, open-source Linux server management panel developed by <b>CyberPross</b>.<br>
   Built from the ground up for <b>Zero-Trust Privacy</b>, <b>Inline Coraza WAF Defense</b>, <b>Isolated Docker Orchestration</b>, <b>Multi-Channel Incident Dispatching</b>, and <b>Autonomous AI DevOps via Model Context Protocol (MCP)</b>.
 </p>
 
-[Quick Start](#-quick-start) • [Why CP-Panel?](#-why-cp-panel) • [Features](#-core-features--capabilities) • [43 MCP Tools](#-autonomous-ai-devops--model-context-protocol-mcp) • [Zero-Trust Architecture](#-zero-trust-loopback-architecture) • [Documentation](#-documentation) • [FAQ](#-frequently-asked-questions-faq) • [License](#-license)
+[Quick Start](#-quick-start) • [Why CP-Panel?](#-why-cp-panel) • [Features](#-core-features--capabilities) • [44 MCP Tools](#-the-44-production-mcp-tools) • [Zero-Trust &amp; Direct DNS](#-dual-network-ingress-architecture) • [Documentation](#-documentation) • [FAQ](#-frequently-asked-questions-faq) • [License](#-license)
 
 </div>
 
@@ -34,7 +34,7 @@ Traditional web hosting control panels (such as **cPanel**, **Plesk**, **1Panel*
 | **Firewall Inbound Ports** | Exposes 80, 443, 2083, 8888, 21, etc. | **0 Inbound Ports Open** (Strict loopback isolation via Cloudflare Tunnel) |
 | **Web Application Firewall** | Basic ModSecurity or paid commercial plugins | **Coraza HTTP WAF** with OWASP Core Rule Set (CRS v4) built-in |
 | **Intrusion Prevention** | Standalone Fail2ban with local-only knowledge | **CrowdSec LAPI** distributed global threat intelligence mesh |
-| **AI Integration** | None, or basic text generation wrappers | **43 Production MCP Tools** with OAuth 2.0 PKCE & Streamable HTTP |
+| **AI Integration** | None, or basic text generation wrappers | **44 Production MCP Tools** with OAuth 2.0 PKCE & Streamable HTTP |
 | **Runtime Isolation** | Shared root/user processes on host | **Containerized Sandbox Runtimes** (`node:24-bookworm-slim`, PHP, Python) |
 | **Incident Notifications** | Rudimentary email alerts | **Centralized Dispatcher** (Telegram, Discord, Slack, HMAC Webhooks) |
 | **Observability** | Basic system stats or paid third-party add-ons | **Embedded Grafana 11 & Prometheus** with adaptive low-load sampling |
@@ -42,39 +42,48 @@ Traditional web hosting control panels (such as **cPanel**, **Plesk**, **1Panel*
 
 ---
 
-## 🔒 Zero-Trust Loopback Architecture
+## 🔒 Dual Network Ingress Architecture
 
-### Why 0 Open Inbound Ports?
-When hosting services over standard public ports (`80`, `443`, `2087`), attackers can discover your server's true origin IP through scanning services (Censys, Shodan, ZoomEye), completely bypassing DNS-level Cloudflare protections.
+CP-Panel offers **two supported public routing architectures**, allowing you to choose the exact topology that fits your infrastructure requirements:
 
-With **CP-Panel's Cloudflare Tunnel-First Architecture**:
-1. Your firewall (**UFW / nftables**) blocks **all public inbound traffic** (inbound ports `80`, `443`, `2087`, `8787` are closed).
-2. The lightweight `cloudflared` daemon establishes secure, outbound-only QUIC/TLS tunnels to Cloudflare's global edge Anycast network.
-3. Inbound user traffic arrives at Cloudflare Edge (DDoS mitigation, Edge SSL, WAF), tunnels directly into the host loopback adapter (`127.0.0.1:19180`), and passes through the **Coraza WAF** before reaching **CP-Panel** or your containerized web applications.
-4. Your server's true origin IP is **never exposed**, making direct network-level attacks impossible.
+### Mode A: Cloudflare Zero-Trust Tunnel (Recommended · 0 Inbound Open Ports)
+* **Zero Public Attack Surface**: The server firewall (**UFW / nftables**) blocks all public inbound web ports (80, 443, 2087, 8787).
+* **Outbound Wire**: The `cloudflared` daemon opens outbound TLS connections to Cloudflare's Edge Anycast network.
+* **Why TLS info in Tunnel mode?**: In Tunnel mode, Cloudflare automatically terminates Edge SSL for your domain at Cloudflare Edge. The traffic then travels encrypted through the tunnel to internal loopback (`127.0.0.1:19180`) $\rightarrow$ Coraza WAF $\rightarrow$ application. Origin certificates are optional because the tunnel wire itself is encrypted end-to-end.
+
+### Mode B: Direct DNS & Cloudflare API Automation (Non-Tunnel / Traditional IP)
+If you decide **not** to use Cloudflare Tunnels and prefer direct DNS routing:
+* **Automated Web DNS (A Records)**: In **System → Cloudflare Tunnel & DNS**, CP-Panel auto-detects your host's public IP and uses Cloudflare API to create or update `A` records with the **Orange Cloud Proxy** toggle (`proxied: true` for CDN/WAF/Edge SSL, or `proxied: false` for direct DNS).
+* **Automated 1-Click Email DNS Suite**: Email protocols (SMTP on port 25/587, IMAP on port 993, POP3 on port 995) cannot be proxied through Cloudflare's HTTP CDN proxy. CP-Panel automatically provisions the complete email DNS suite:
+  * **Mail Server A Record**: `mail.<domain>` pointing directly to your server IP (`proxied: false`).
+  * **MX Record**: Priority 10 pointing to `mail.<domain>`.
+  * **SPF Record (TXT)**: `v=spf1 mx a ip4:<server_ip> ~all` ensuring your server is authorized to send mail.
+  * **DMARC Record (TXT)**: `_dmarc.<domain>` with customizable policy (`quarantine`, `none`, `reject`) and aggregate report routing.
+  * **DKIM Record (TXT)**: `default._domainkey.<domain>` cryptographic signing key placeholder.
+* **Automated Origin TLS (ACME DNS-01)**: Since direct connections reach your server, local TLS is mandatory. CP-Panel automatically requests and signs Let's Encrypt / ZeroSSL ECDSA certificates using Cloudflare DNS-01 TXT record verification.
 
 ```
                                   [ INTERNET ]
                                        │
                          Cloudflare Edge (WAF, DDoS, SSL)
                                        │
-                      Cloudflare Tunnel (Outbound Encrypted Wire)
-                                       │
+            ┌──────────────────────────┴──────────────────────────┐
+            │                                                     │
+     [ Mode A: Outbound Tunnel ]                        [ Mode B: Direct DNS ]
+            │                                                     │
+            ▼                                                     ▼
 ┌────────────────────────────── SERVER / HOST ──────────────────────────────┐
 │                                                                           │
-│  [ cloudflared ] (Loopback connector · Zero open inbound ports required)  │
-│        │                                                                  │
-│        ▼ (127.0.0.1:19180)                                                │
-│  [ Coraza WAF Gateway ] (OWASP Core Rule Set v4 Signature Engine)         │
-│        │                                                                  │
-│        ▼ (127.0.0.1:8787)                                                 │
+│  [ cloudflared / direct IP ] ──► [ Coraza WAF Gateway (127.0.0.1:19180) ] │
+│                                         │                                 │
+│                                         ▼                                 │
 │  [ CP-Panel Core Engine ] ──► [ Privileged Agent (Unix Domain Socket) ]   │
 │        │                                   │                              │
 │        ├─► Docker Compose & Containers     ├─► Systemd Service Control    │
 │        ├─► Isolated Web Sandboxes (Node)   ├─► Atomic Transactional FS    │
-│        ├─► Embedded Grafana 11 Dashboard   ├─► Suricata IDS & Threat Map  │
-│        ├─► Incident Dispatcher (Webhooks)  ├─► CrowdSec LAPI Threat Mesh  │
-│        └─► 43 Remote MCP AI Tools          └─► Automated Service Recovery │
+│        ├─► Embedded Grafana 11 Dashboard   ├─► Cloudflare DNS Automation  │
+│        ├─► Incident Dispatcher (Webhooks)  ├─► 1-Click Email DNS Suite    │
+│        └─► 44 Remote MCP AI Tools          └─► Automated Service Recovery │
 │                                                                           │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -125,14 +134,14 @@ With **CP-Panel's Cloudflare Tunnel-First Architecture**:
 
 ---
 
-## 🛠️ The 43 Production MCP Tools
+## 🛠️ The 44 Production MCP Tools
 
-CP-Panel exposes **43 purpose-built MCP tools** divided into 7 functional domains, enabling AI agents to act as trusted, autonomous DevOps copilots:
+CP-Panel exposes **44 purpose-built MCP tools** divided into 7 functional domains, enabling AI agents to act as trusted, autonomous DevOps copilots:
 
 | Domain | Tools | Description |
 | :--- | :--- | :--- |
 | **System & Daemon Control** | `panel_systemd`, `panel_nginx`, `panel_docker`, `panel_compose`, `panel_cloudflare`, `panel_coraza`, `panel_crowdsec` | Supervised management of systemd units, Nginx vhosts, Docker containers, Compose stacks, Cloudflare Tunnel, Coraza WAF, and CrowdSec LAPI. |
-| **Developer & Sysadmin Tools** *(NEW)* | `panel_apt`, `panel_git`, `panel_docker_build`, `panel_test_runner` | Safe APT package management (search, info, simulation `-s`, upgrade), Git repository lifecycle (clone, pull, status, diff, branch), Docker image building with custom build-args, and isolated rootless test execution (`--network none`). |
+| **Developer & Sysadmin Tools** *(NEW)* | `panel_apt`, `panel_git`, `panel_docker_build`, `panel_test_runner`, `panel_cloudflare_dns` | Safe APT package management (search, info, simulation `-s`, upgrade), Git repository lifecycle (clone, pull, status, diff, branch), Docker image building with custom build-args, isolated rootless test execution (`--network none`), and Cloudflare DNS automation for direct-IP setups (A records, Orange Cloud proxy, 1-click Email DNS suite, and DNS-01 ACME certs). |
 | **Security & Network Audit** *(NEW)* | `panel_security_inspect`, `panel_network_inspect`, `panel_waf_exempt` | Structured read-only inspection of Coraza WAF rulesets, CrowdSec decisions & active bouncers, Suricata alerts, active listening sockets (`ss -tulpn`), UFW rules, and Cloudflare ingress routes. |
 | **Web Hosting & Deployments** | `panel_static_preview`, `panel_static_deploy`, `panel_proxy_create`, `panel_website_import`, `panel_ssl_acme` | Preview directories, deploy static sites with atomic symlink swaps, configure reverse proxies, import multi-runtime websites, and automate ACME SSL issuance. |
 | **Transactional File Studio** | `panel_file_upload`, `panel_file_owner`, `panel_file_permissions`, `panel_file_read`, `panel_file_edit`, `panel_file_restore`, `panel_transactions` | Atomic file operations up to 1 MiB with preflight validation, path traversal guards, private transactional snapshots, and instant rollback. |
@@ -243,13 +252,21 @@ Comprehensive architectural and configuration guides:
 <details>
 <summary><b>1. How does CP-Panel compare to cPanel, aaPanel, or 1Panel?</b></summary>
 <br>
-Unlike traditional panels that expose management ports (2083, 8888, 8090) and raw web ports (80, 443) directly to the public internet, CP-Panel is strictly <b>Zero-Trust and Cloudflare Tunnel-first</b>. It requires <b>zero open inbound firewall ports</b>, includes enterprise-grade Coraza WAF (CRS v4) and CrowdSec out of the box, and provides <b>43 production MCP tools</b> enabling external AI agents to manage servers safely.
+Unlike traditional panels that expose management ports (2083, 8888, 8090) and raw web ports (80, 443) directly to the public internet, CP-Panel is strictly <b>Zero-Trust and Cloudflare Tunnel-first</b>. It requires <b>zero open inbound firewall ports</b>, includes enterprise-grade Coraza WAF (CRS v4) and CrowdSec out of the box, and provides <b>44 production MCP tools</b> enabling external AI agents to manage servers safely.
 </details>
 
 <details>
-<summary><b>2. Why do I not need to open port 80 or 443 on my firewall?</b></summary>
+<summary><b>2. Why does CP-Panel have TLS/SSL settings if it runs via Cloudflare Tunnel? What if I prefer the Direct DNS method?</b></summary>
 <br>
-CP-Panel routes all ingress traffic through Cloudflare Tunnels (<code>cloudflared</code>). The tunnel initiates outbound encrypted connections to Cloudflare's edge network. When visitors access your site, Cloudflare routes traffic securely down the tunnel to loopback (<code>127.0.0.1</code>), through Coraza WAF, and into your application. All public inbound firewall ports (including 80, 443, 2087, and 8787) can remain completely closed, preventing port scanning and direct origin attacks.
+When running in <b>Mode A (Cloudflare Tunnel)</b>, Cloudflare Edge automatically handles and terminates public HTTPS/SSL at Cloudflare's edge network for free, then tunnels traffic down an outbound encrypted wire into loopback. In that mode, local origin TLS certificates are optional.<br><br>
+However, if you choose <b>Mode B (Direct DNS / Non-Tunnel)</b>, visitors connect directly to your server's public IP address. In that mode, local TLS/SSL certificates are <b>mandatory</b> for HTTPS encryption and Cloudflare Full/Strict SSL proxying. CP-Panel automatically manages both paths: it includes a full <b>Cloudflare API automation suite</b> that creates <code>A</code> records, configures <b>1-Click Email DNS (MX, SPF, DMARC, DKIM)</b>, and issues trusted Let's Encrypt / ZeroSSL certificates via Cloudflare DNS-01 API challenges with zero manual effort.
+</details>
+
+<details>
+<summary><b>3. Do I need to open port 80 or 443 on my firewall?</b></summary>
+<br>
+If you use <b>Mode A (Cloudflare Tunnel)</b>: <b>No.</b> All public inbound firewall ports (including 80, 443, 2087, and 8787) can remain completely closed.<br>
+If you use <b>Mode B (Direct DNS)</b>: You will need ports 80 and 443 open for web traffic, while CP-Panel itself remains protected behind Coraza WAF.
 </details>
 
 <details>

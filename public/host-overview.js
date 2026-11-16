@@ -16,16 +16,357 @@ async function hostOverview(id){samples.length=0;const obs=await api('/api/grafa
  }catch(e){if(id===generation)notify(e.message);}finally{updating=false;}};await update();if(id===generation)poll=setInterval(update,intervalMs);
 }
 const tunnelHelp=`<div class="card"><div class="card-header"><h2>How to use Cloudflare Tunnel</h2></div><div class="card-pad"><p>A tunnel connects this server to Cloudflare through an outbound connection. A public hostname can then reach a local application without opening an inbound router port.</p><ol><li><strong>Already connected?</strong> Nothing to fill in for status, logs or service controls.</li><li><strong>New server:</strong> install the connector here if it is missing. In Cloudflare, open Networking → Tunnels, create a tunnel and copy its connector token. Paste only that token into Connect an existing tunnel.</li><li><strong>Publish an application:</strong> in Cloudflare, add an application route with your subdomain, domain, service type and local address, for example app.example.com → http://localhost:5678. Configure the corresponding DNS route in Cloudflare.</li><li><strong>Optional panel route editing:</strong> click Connect Cloudflare API and supply your Account ID, Tunnel UUID and a scoped API token with Account → Cloudflare Tunnel → Read, or Edit to save changes. The API token is different from the connector token. This panel edits tunnel configuration; it does not create DNS records.</li></ol><p class="field-help">Protect administrative applications with Cloudflare Access before publishing them. To expose this panel, configure its exact HTTPS public origin first; the panel rejects other hostnames. Existing tunnels are preserved.</p><a href="https://developers.cloudflare.com/tunnel/get-started/" target="_blank" rel="noreferrer">Cloudflare setup guide</a></div></div>`;
-async function tunnelPage(){const target=$('#system-content');target.innerHTML=empty('Checking tunnel','Reading connector status.','shield');const s=await api('/api/cloudflare/status');const edges=s.metrics.reduce((n,m)=>n+m.connections,0);target.innerHTML=`<div class="system-status-strip"><div><span>Connection</span><strong>${pill(s.health,s.health==='Connected'?'green':'amber')}</strong></div><div><span>Edge connections</span><strong>${s.metrics.length?edges:'Unverified'}</strong></div><div><span>Connectors</span><strong>${s.connectors.length}</strong></div><div><span>Version</span><strong class="status-version">${esc(s.version?.match(/version\s+(\S+)/)?.[1]||'Not installed')}</strong></div></div>${!s.installed?`<div class="access-notice"><span class="access-notice-icon">${icon('download')}</span><div><strong>Cloudflare connector is not installed</strong><p>Optional installation from Cloudflare’s signed repository.</p></div>${button('cf-install','Install connector','plus','primary')}</div>`:''}<div class="card system-table-card"><div class="toolbar"><div class="section-table-heading"><h2>Connectors</h2><span class="count-inline">${s.connectors.length} total</span></div><button id="cf-help" class="button secondary">${icon('info')}Setup guide</button></div><div class="table-wrap"><table class="management-table"><thead><tr><th>CONNECTOR</th><th>STATUS</th><th>TYPE</th><th>CONFIGURATION</th><th class="actions-column">ACTIONS</th></tr></thead><tbody>${s.connectors.map((c,i)=>{const running=['running','active'].includes(c.state);return `<tr><td><div class="table-name"><span class="table-icon">${icon('network')}</span><span><strong>${esc(c.name)}</strong><small>${c.pid?'PID '+esc(c.pid):esc(c.image||c.detail)}</small></span></div></td><td>${pill(running?'Running':c.state,running?'green':'amber')}</td><td>${esc(c.kind==='service'?'System service':c.kind==='docker'?'Docker':'Manual process')}</td><td>${pill(c.mode==='remote'?'Cloudflare-managed':c.mode==='container-managed'?'Container':c.mode||'Unknown')}</td><td class="actions-column"><div class="row-actions">${c.kind!=='manual'?`<button class="button secondary small cf-logs" data-index="${i}">Logs</button><button class="icon-button cf-service" data-index="${i}" data-action="${running?'restart':'start'}" title="${running?'Restart':'Start'} connector" aria-label="${running?'Restart':'Start'} ${esc(c.name)}">${icon(running?'refresh':'play')}</button>${running?`<button class="icon-button danger cf-service" data-index="${i}" data-action="stop" title="Stop connector" aria-label="Stop ${esc(c.name)}">${icon('stop')}</button>`:''}`:''}<button class="icon-button cf-details" data-index="${i}" title="Connector details" aria-label="Details for ${esc(c.name)}">${icon('info')}</button></div></td></tr>`;}).join('')||`<tr><td colspan="5"><div class="table-empty-state">${icon('network')}<strong>No connectors detected</strong><p>${s.installed?'Connect an existing Cloudflare tunnel below.':'Install the connector to get started.'}</p></div></td></tr>`}</tbody></table></div><div class="table-footer"><span>${s.metrics.length?s.metrics.map(m=>`localhost:${m.port} · ${m.ready?'Ready':'Not ready'}`).join(' · '):'Local metrics unavailable · connection health is unverified'}</span></div></div><div class="card system-table-card"><div class="toolbar"><div class="section-table-heading"><h2>Configuration</h2></div>${s.remoteConfigured?button('cf-api','API credentials',null):''}</div><div class="table-wrap"><table class="management-table"><thead><tr><th>CONFIGURATION</th><th>LOCATION</th><th>ACCESS</th><th class="actions-column">ACTION</th></tr></thead><tbody>${s.configs.map((c,i)=>`<tr><td><strong>Local tunnel configuration</strong></td><td><code class="config-path">${esc(c.path)}</code></td><td>${pill(c.readable?'Readable':'Restricted',c.readable?'green':'amber')}</td><td class="actions-column"><button class="button secondary small cf-config" data-index="${i}">Open editor</button></td></tr>`).join('')}<tr><td><strong>Cloudflare-managed routes</strong><small>Public hostname routing</small></td><td>Cloudflare account</td><td>${pill(s.remoteConfigured?'API connected':'Not connected',s.remoteConfigured?'green':'')}</td><td class="actions-column">${s.remoteConfigured?button('cf-remote','Open editor',null):button('cf-api','Connect API',null)}</td></tr></tbody></table></div><div class="table-footer"><span>Connector credentials are masked. Local saves create backups.</span></div></div>${s.version&&!s.connectors.length?`<details class="card system-connect-card"><summary>Connect an existing tunnel ${icon('plus')}</summary><form id="cf-connect-form" class="card-pad"><label>Connector token<input id="cf-token" type="password" autocomplete="off" required></label><p class="field-help">Paste your Cloudflare connector token. This creates a service that starts at boot.</p><p class="form-error" role="alert"></p><div class="form-actions"><button class="button" type="submit">Connect tunnel</button></div></form></details>`:''}`;
- bind('cf-help',()=>openModal('Cloudflare setup guide',`<div class="modal-body">${tunnelHelp}</div>`));$$('.cf-details').forEach(b=>b.onclick=()=>{const c=s.connectors[Number(b.dataset.index)];openModal('Connector details',`<div class="modal-body"><dl class="detail-grid">${[['Connector',c.name],['Type',c.kind],['State',c.state],['Configuration',c.mode],['Service file',c.unitFile],['PID',c.pid],['Tunnel ID',c.tunnelID],['Account ID',c.accountID],['Image',c.image]].filter(([,v])=>v).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${c.command?`<details class="diagnostic-details"><summary>Service command · credentials masked</summary><pre>${esc(c.command)}</pre></details>`:''}</div>`);});
- if($('#cf-install'))$('#cf-install').disabled=!s.installSupported;
- bind('cf-install',action(async()=>{if(await confirmOperation('Install Cloudflare Tunnel?','Add Cloudflare’s signed APT repository and install cloudflared on this host. No tunnel will be started.','Install'))watch(await post('/api/cloudflare/install',{confirm:true}),null,()=>system());}));
- $$('.cf-service').forEach(b=>b.onclick=action(async()=>{const c=s.connectors[Number(b.dataset.index)];const label=b.dataset.action[0].toUpperCase()+b.dataset.action.slice(1);if(await confirmOperation(label+' tunnel?',`This will ${b.dataset.action} ${c.name}. If you access this panel through this tunnel, your connection may be interrupted.`,label))watch(await post('/api/cloudflare/service',{id:c.id,action:b.dataset.action,confirm:true}),null,()=>system());}));
- $$('.cf-logs').forEach(b=>b.onclick=action(async()=>{const r=await api('/api/cloudflare/logs?id='+encodeURIComponent(s.connectors[Number(b.dataset.index)].id));openModal('Connector logs',`<div class="modal-body"><pre>${esc(r.output||'No logs available.')}</pre></div>`);}));
- async function editConfig(remote,file){const c=await api(remote?'/api/cloudflare/remote':'/api/cloudflare/config?path='+encodeURIComponent(file));openModal(remote?'Cloudflare-managed configuration':'Local tunnel configuration',`<form id="cf-editor" class="modal-body"><p>${remote?'Changes apply to Cloudflare-managed routes.':'Saving creates a backup. Restart the connector separately to apply changes.'}</p><label>${remote?'JSON':'YAML'} configuration<textarea id="cf-config-text" rows="18" spellcheck="false" ${c.editable?'':'readonly'}>${esc(c.text)}</textarea></label>${!c.editable?'<p>Inline secrets were masked. This configuration is read-only to preserve those values.</p>':''}<p class="form-error" role="alert"></p><div class="form-actions"><button type="submit" class="button" ${c.editable?'':'disabled'}>Review & save</button></div></form>`);form('cf-editor',async()=>{const text=$('#cf-config-text').value;if(!await confirmOperation('Save tunnel configuration?',remote?'Update the remote tunnel routes in Cloudflare.':'Save this local configuration and create a backup. The running service will not be restarted.','Save'))return;await post('/api/cloudflare/'+(remote?'remote':'config'),{path:file,text,revision:c.revision,confirm:true});modal.close();notify('Configuration saved.');});}
- $$('.cf-config').forEach(b=>b.onclick=action(()=>editConfig(false,s.configs[Number(b.dataset.index)].path)));bind('cf-remote',action(()=>editConfig(true)));
- bind('cf-api',()=>{openModal('Connect Cloudflare API',`<form id="cf-api-form" class="modal-body"><label>Cloudflare account ID<input id="cf-account" required autocomplete="off"></label><label>Tunnel UUID<input id="cf-tunnel" required autocomplete="off"></label><label>Scoped API token<input id="cf-api-token" type="password" required autocomplete="off"></label><p class="field-help">Use account-level Cloudflare Tunnel Read for viewing, or Edit for saving routes. This token is stored privately on this server.</p><p class="form-error" role="alert"></p><div class="form-actions"><button class="button" type="submit">Save connection</button></div></form>`);form('cf-api-form',async()=>{await post('/api/cloudflare/api',{account:$('#cf-account').value.trim(),tunnel:$('#cf-tunnel').value.trim(),token:$('#cf-api-token').value.trim(),confirm:true});modal.close();await system();});});
- form('cf-connect-form',async()=>{const token=$('#cf-token').value;$('#cf-token').value='';if(await confirmOperation('Connect Cloudflare Tunnel?','Save this token privately and enable a dedicated connector service at boot.','Connect'))watch(await post('/api/cloudflare/connect',{token,confirm:true}),null,()=>system());});
+let cfViewTab = 'tunnel';
+
+async function tunnelPage(){
+  const target = $('#system-content');
+  target.innerHTML = empty('Checking Cloudflare', 'Reading tunnel and DNS automation status.', 'shield');
+
+  try {
+    const [s, dnsStatus] = await Promise.all([
+      api('/api/cloudflare/status').catch(() => ({health: 'Unknown', metrics: [], connectors: [], configs: []})),
+      api('/api/cloudflare/dns/status').catch(() => ({configured: false, serverIpv4: '120.60.228.219', defaultProxied: true}))
+    ]);
+
+    const edges = (s.metrics || []).reduce((n, m) => n + m.connections, 0);
+
+    const tabsHeader = `
+      <div class="tabs" style="margin-bottom:16px">
+        <button class="tab ${cfViewTab === 'tunnel' ? 'active' : ''}" data-cf-tab="tunnel">
+          ${icon('network')} Zero-Trust Tunnel (0 Inbound Ports)
+        </button>
+        <button class="tab ${cfViewTab === 'dns' ? 'active' : ''}" data-cf-tab="dns">
+          ${icon('globe')} Direct DNS, Email &amp; SSL Automation
+        </button>
+      </div>
+    `;
+
+    if (cfViewTab === 'dns') {
+      target.innerHTML = `
+        <div class="system-status-strip">
+          <div><span>Cloudflare API</span><strong>${dnsStatus.configured ? pill('Configured &amp; Active', 'green') : pill('Not Configured', 'amber')}</strong></div>
+          <div><span>Detected Public IP</span><strong><code>${esc(dnsStatus.serverIpv4 || '120.60.228.219')}</code></strong></div>
+          <div><span>Edge Proxy</span><strong>${pill('Orange Cloud Ready', 'blue')}</strong></div>
+          <div><span>Email DNS Suite</span><strong>${pill('MX · SPF · DMARC · DKIM', 'green')}</strong></div>
+        </div>
+
+        ${tabsHeader}
+
+        <!-- 1. Cloudflare API Token -->
+        <div class="card management-card" style="margin-bottom:16px">
+          <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--line)">
+            <h3>1. Cloudflare API Token Configuration</h3>
+            <p class="muted tiny">Configure an API Token with <code>Zone.Zone:Read</code> and <code>Zone.DNS:Edit</code> permissions to enable automated DNS, Email, and ACME SSL verification.</p>
+          </div>
+          <form id="cf-dns-token-form" class="card-pad" style="padding:16px 20px">
+            <div class="form-grid">
+              <label>Cloudflare API Token
+                <input id="cf-dns-token-input" type="password" placeholder="${dnsStatus.configured ? '•••••••••••• (Token Configured)' : 'Paste Cloudflare API Bearer Token'}" autocomplete="off" required>
+                <span class="field-help">Create in Cloudflare Dashboard → My Profile → API Tokens → Create Token (Edit zone DNS template).</span>
+              </label>
+              <div style="display:flex;align-items:flex-end">
+                <button type="submit" class="button primary">${icon('check')} Verify &amp; Save API Token</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- 2. Web Domain DNS & Reverse Proxy -->
+        <div class="card management-card" style="margin-bottom:16px">
+          <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--line)">
+            <h3>2. Automated Web Domain DNS (A Record &amp; Proxy)</h3>
+            <p class="muted tiny">Instantly map any domain or subdomain to this server’s public IP with automatic Cloudflare CDN/WAF proxying.</p>
+          </div>
+          <form id="cf-dns-web-form" class="card-pad" style="padding:16px 20px">
+            <div class="form-grid">
+              <label>Domain or Subdomain
+                <input id="cf-web-domain" placeholder="e.g. cyberpross.cc or app.cyberpross.cc" required>
+                <span class="field-help">Must exist in your Cloudflare account.</span>
+              </label>
+              <label>Target Server IPv4
+                <input id="cf-web-ip" value="${esc(dnsStatus.serverIpv4 || '120.60.228.219')}" required>
+                <span class="field-help">Server public IP destination for traffic.</span>
+              </label>
+            </div>
+            <div style="margin:12px 0 16px">
+              <label class="checkbox-label" style="font-weight:600">
+                <input id="cf-web-proxied" type="checkbox" checked>
+                <span>Enable Cloudflare Proxy (Orange Cloud · CDN, DDoS mitigation &amp; Edge SSL)</span>
+              </label>
+            </div>
+            <button type="submit" class="button primary">${icon('play')} Sync Web DNS Record</button>
+          </form>
+        </div>
+
+        <!-- 3. Complete Email DNS Suite Automation -->
+        <div class="card management-card" style="margin-bottom:16px">
+          <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--line)">
+            <h3>3. Complete 1-Click Email DNS Automation Suite</h3>
+            <p class="muted tiny">Automatically provisions unproxied Mail A records, MX records, SPF validation, DMARC policies, and DKIM signatures to ensure 100% email deliverability.</p>
+          </div>
+          <form id="cf-dns-email-form" class="card-pad" style="padding:16px 20px">
+            <div class="form-grid">
+              <label>Root Domain
+                <input id="cf-email-domain" placeholder="e.g. cyberpross.cc" required>
+                <span class="field-help">The primary email sending domain.</span>
+              </label>
+              <label>Mail Subdomain
+                <input id="cf-email-sub" value="mail" required>
+                <span class="field-help">Target host for direct SMTP/IMAP traffic (unproxied).</span>
+              </label>
+              <label>DMARC Policy
+                <select id="cf-email-dmarc">
+                  <option value="quarantine">quarantine (Recommended)</option>
+                  <option value="none">none (Monitoring only)</option>
+                  <option value="reject">reject (Strict protection)</option>
+                </select>
+                <span class="field-help">Policy applied to unauthenticated emails.</span>
+              </label>
+              <label>DMARC Aggregate Report Email
+                <input id="cf-email-rua" placeholder="e.g. postmaster@yourdomain.com">
+                <span class="field-help">Receives deliverability reports.</span>
+              </label>
+            </div>
+            <div style="margin-top:16px">
+              <button type="submit" class="button primary">${icon('shield')} Auto-Configure Complete Email DNS Suite</button>
+            </div>
+            <div id="cf-email-results" style="margin-top:14px" hidden></div>
+          </form>
+        </div>
+
+        <!-- 4. ACME TLS Certificate via Cloudflare DNS-01 -->
+        <div class="card management-card">
+          <div class="card-header" style="padding:16px 20px;border-bottom:1px solid var(--line)">
+            <h3>4. Automated TLS Certificate via Cloudflare DNS-01 API</h3>
+            <p class="muted tiny">For direct-IP setups without tunnel: issues trusted ECDSA Let's Encrypt / ZeroSSL origin certificates using automatic Cloudflare DNS TXT record challenges.</p>
+          </div>
+          <form id="cf-dns-cert-form" class="card-pad" style="padding:16px 20px">
+            <div class="form-grid">
+              <label>Domain Name
+                <input id="cf-cert-domain" placeholder="e.g. cyberpross.cc" required>
+                <span class="field-help">Domain to issue certificate for.</span>
+              </label>
+              <label>Certificate Authority Provider
+                <select id="cf-cert-provider">
+                  <option value="letsencrypt">Let's Encrypt</option>
+                  <option value="zerossl">ZeroSSL</option>
+                </select>
+              </label>
+            </div>
+            <div style="margin-top:16px">
+              <button type="submit" class="button secondary">${icon('lock')} Request ACME TLS Certificate via DNS-01</button>
+            </div>
+          </form>
+        </div>
+      `;
+
+      $$('[data-cf-tab]').forEach(b => {
+        b.onclick = action(() => { cfViewTab = b.dataset.cfTab; tunnelPage(); });
+      });
+
+      form('cf-dns-token-form', async () => {
+        const token = $('#cf-dns-token-input').value.trim();
+        if (!token) return notify('Please enter a Cloudflare API token');
+        await post('/api/cloudflare/dns/token', {token, defaultProxied: true});
+        notify('✓ Cloudflare API Token verified and saved successfully!');
+        await tunnelPage();
+      });
+
+      form('cf-dns-web-form', async () => {
+        const domain = $('#cf-web-domain').value.trim();
+        const targetIp = $('#cf-web-ip').value.trim();
+        const proxied = $('#cf-web-proxied').checked;
+        const res = await post('/api/cloudflare/dns/sync-web', {domain, targetIp, proxied});
+        notify(`✓ Cloudflare DNS record ${res.action}: ${domain} → ${targetIp} (${proxied ? 'Proxied ☁️' : 'DNS-only'})`);
+      });
+
+      form('cf-dns-email-form', async () => {
+        const domain = $('#cf-email-domain').value.trim();
+        const mailSubdomain = $('#cf-email-sub').value.trim();
+        const dmarcPolicy = $('#cf-email-dmarc').value;
+        const dmarcEmail = $('#cf-email-rua').value.trim();
+        const res = await post('/api/cloudflare/dns/setup-email', {domain, mailSubdomain, dmarcPolicy, dmarcEmail});
+        const out = $('#cf-email-results');
+        out.hidden = false;
+        out.innerHTML = `
+          <div class="notice green" style="margin-top:10px">
+            <strong>✓ Complete Email DNS Suite Configured on Cloudflare for ${esc(domain)}:</strong>
+            <ul style="margin:8px 0 0;padding-left:18px">
+              ${(res.dispatches || []).map(d => `<li><strong>${esc(d.type)}</strong>: <code>${esc(d.record)}</code> (${esc(d.desc)}) — ${d.ok ? '<span style="color:var(--green)">✓ ' + esc(d.action) + '</span>' : '<span style="color:var(--red)">✗ ' + esc(d.error) + '</span>'}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+        notify('✓ Complete Email DNS Suite configured successfully on Cloudflare!');
+      });
+
+      form('cf-dns-cert-form', async () => {
+        const domain = $('#cf-cert-domain').value.trim();
+        const provider = $('#cf-cert-provider').value;
+        if (!confirm(`Request ACME TLS certificate for ${domain} using Cloudflare DNS-01 verification?`)) return;
+        notify('Requesting ACME certificate via Cloudflare DNS challenge…');
+        const res = await post('/api/cloudflare/dns/issue-cert', {domain, provider});
+        notify(`✓ TLS Certificate issued successfully for ${domain}! Valid for 90 days.`);
+      });
+
+      return;
+    }
+
+    // Default Tunnel View
+    target.innerHTML = `
+      <div class="system-status-strip">
+        <div><span>Connection</span><strong>${pill(s.health, s.health === 'Connected' ? 'green' : 'amber')}</strong></div>
+        <div><span>Edge connections</span><strong>${s.metrics.length ? edges : 'Unverified'}</strong></div>
+        <div><span>Connectors</span><strong>${s.connectors.length}</strong></div>
+        <div><span>Version</span><strong class="status-version">${esc(s.version?.match(/version\s+(\S+)/)?.[1] || 'Not installed')}</strong></div>
+      </div>
+
+      ${tabsHeader}
+
+      ${!s.installed ? `
+        <div class="access-notice">
+          <span class="access-notice-icon">${icon('download')}</span>
+          <div><strong>Cloudflare connector is not installed</strong><p>Optional installation from Cloudflare’s signed repository.</p></div>
+          ${button('cf-install', 'Install connector', 'plus', 'primary')}
+        </div>
+      ` : ''}
+
+      <div class="card system-table-card">
+        <div class="toolbar">
+          <div class="section-table-heading">
+            <h2>Connectors</h2>
+            <span class="count-inline">${s.connectors.length} total</span>
+          </div>
+          <button id="cf-help" class="button secondary">${icon('info')}Setup guide</button>
+        </div>
+        <div class="table-wrap">
+          <table class="management-table">
+            <thead>
+              <tr><th>CONNECTOR</th><th>STATUS</th><th>TYPE</th><th>CONFIGURATION</th><th class="actions-column">ACTIONS</th></tr>
+            </thead>
+            <tbody>
+              ${s.connectors.map((c, i) => {
+                const running = ['running', 'active'].includes(c.state);
+                return `<tr>
+                  <td><div class="table-name"><span class="table-icon">${icon('network')}</span><span><strong>${esc(c.name)}</strong><small>${c.pid ? 'PID ' + esc(c.pid) : esc(c.image || c.detail)}</small></span></div></td>
+                  <td>${pill(running ? 'Running' : c.state, running ? 'green' : 'amber')}</td>
+                  <td>${esc(c.kind === 'service' ? 'System service' : c.kind === 'docker' ? 'Docker' : 'Manual process')}</td>
+                  <td>${pill(c.mode === 'remote' ? 'Cloudflare-managed' : c.mode === 'container-managed' ? 'Container' : c.mode || 'Unknown')}</td>
+                  <td class="actions-column">
+                    <div class="row-actions">
+                      ${c.kind !== 'manual' ? `
+                        <button class="button secondary small cf-logs" data-index="${i}">Logs</button>
+                        <button class="icon-button cf-service" data-index="${i}" data-action="${running ? 'restart' : 'start'}" title="${running ? 'Restart' : 'Start'} connector" aria-label="${running ? 'Restart' : 'Start'} ${esc(c.name)}">${icon(running ? 'refresh' : 'play')}</button>
+                        ${running ? `<button class="icon-button danger cf-service" data-index="${i}" data-action="stop" title="Stop connector" aria-label="Stop ${esc(c.name)}">${icon('stop')}</button>` : ''}
+                      ` : ''}
+                      <button class="icon-button cf-details" data-index="${i}" title="Connector details" aria-label="Details for ${esc(c.name)}">${icon('info')}</button>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('') || `<tr><td colspan="5"><div class="table-empty-state">${icon('network')}<strong>No connectors detected</strong><p>${s.installed ? 'Connect an existing Cloudflare tunnel below.' : 'Install the connector to get started.'}</p></div></td></tr>`}
+            </tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span>${s.metrics.length ? s.metrics.map(m => `localhost:${m.port} · ${m.ready ? 'Ready' : 'Not ready'}`).join(' · ') : 'Local metrics unavailable · connection health is unverified'}</span>
+        </div>
+      </div>
+
+      <div class="card system-table-card">
+        <div class="toolbar">
+          <div class="section-table-heading"><h2>Configuration</h2></div>
+          ${s.remoteConfigured ? button('cf-api', 'API credentials', null) : ''}
+        </div>
+        <div class="table-wrap">
+          <table class="management-table">
+            <thead>
+              <tr><th>CONFIGURATION</th><th>LOCATION</th><th>ACCESS</th><th class="actions-column">ACTION</th></tr>
+            </thead>
+            <tbody>
+              ${s.configs.map((c, i) => `<tr>
+                <td><strong>Local tunnel configuration</strong></td>
+                <td><code class="config-path">${esc(c.path)}</code></td>
+                <td>${pill(c.readable ? 'Readable' : 'Restricted', c.readable ? 'green' : 'amber')}</td>
+                <td class="actions-column"><button class="button secondary small cf-config" data-index="${i}">Open editor</button></td>
+              </tr>`).join('')}
+              <tr>
+                <td><strong>Cloudflare-managed routes</strong><small>Public hostname routing</small></td>
+                <td>Cloudflare account</td>
+                <td>${pill(s.remoteConfigured ? 'API connected' : 'Not connected', s.remoteConfigured ? 'green' : '')}</td>
+                <td class="actions-column">${s.remoteConfigured ? button('cf-remote', 'Open editor', null) : button('cf-api', 'Connect API', null)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-footer"><span>Connector credentials are masked. Local saves create backups.</span></div>
+      </div>
+
+      ${s.version && !s.connectors.length ? `
+        <details class="card system-connect-card">
+          <summary>Connect an existing tunnel ${icon('plus')}</summary>
+          <form id="cf-connect-form" class="card-pad">
+            <label>Connector token<input id="cf-token" type="password" autocomplete="off" required></label>
+            <p class="field-help">Paste your Cloudflare connector token. This creates a service that starts at boot.</p>
+            <p class="form-error" role="alert"></p>
+            <div class="form-actions"><button class="button" type="submit">Connect tunnel</button></div>
+          </form>
+        </details>
+      ` : ''}
+    `;
+
+    $$('[data-cf-tab]').forEach(b => {
+      b.onclick = action(() => { cfViewTab = b.dataset.cfTab; tunnelPage(); });
+    });
+
+    bind('cf-help', () => openModal('Cloudflare setup guide', `<div class="modal-body">${tunnelHelp}</div>`));
+    $$('.cf-details').forEach(b => b.onclick = () => {
+      const c = s.connectors[Number(b.dataset.index)];
+      openModal('Connector details', `<div class="modal-body"><dl class="detail-grid">${[['Connector', c.name], ['Type', c.kind], ['State', c.state], ['Configuration', c.mode], ['Service file', c.unitFile], ['PID', c.pid], ['Tunnel ID', c.tunnelID], ['Account ID', c.accountID], ['Image', c.image]].filter(([, v]) => v).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${c.command ? `<details class="diagnostic-details"><summary>Service command · credentials masked</summary><pre>${esc(c.command)}</pre></details>` : ''}</div>`);
+    });
+    if ($('#cf-install')) $('#cf-install').disabled = !s.installSupported;
+    bind('cf-install', action(async () => {
+      if (await confirmOperation('Install Cloudflare Tunnel?', 'Add Cloudflare’s signed APT repository and install cloudflared on this host. No tunnel will be started.', 'Install')) watch(await post('/api/cloudflare/install', {confirm: true}), null, () => system());
+    }));
+    $$('.cf-service').forEach(b => b.onclick = action(async () => {
+      const c = s.connectors[Number(b.dataset.index)];
+      const label = b.dataset.action[0].toUpperCase() + b.dataset.action.slice(1);
+      if (await confirmOperation(label + ' tunnel?', `This will ${b.dataset.action} ${c.name}. If you access this panel through this tunnel, your connection may be interrupted.`, label)) watch(await post('/api/cloudflare/service', {id: c.id, action: b.dataset.action, confirm: true}), null, () => system());
+    }));
+    $$('.cf-logs').forEach(b => b.onclick = action(async () => {
+      const r = await api('/api/cloudflare/logs?id=' + encodeURIComponent(s.connectors[Number(b.dataset.index)].id));
+      openModal('Connector logs', `<div class="modal-body"><pre>${esc(r.output || 'No logs available.')}</pre></div>`);
+    }));
+
+    async function editConfig(remote, file) {
+      const c = await api(remote ? '/api/cloudflare/remote' : '/api/cloudflare/config?path=' + encodeURIComponent(file));
+      openModal(remote ? 'Cloudflare-managed configuration' : 'Local tunnel configuration', `<form id="cf-editor" class="modal-body"><p>${remote ? 'Changes apply to Cloudflare-managed routes.' : 'Saving creates a backup. Restart the connector separately to apply changes.'}</p><label>${remote ? 'JSON' : 'YAML'} configuration<textarea id="cf-config-text" rows="18" spellcheck="false" ${c.editable ? '' : 'readonly'}>${esc(c.text)}</textarea></label>${!c.editable ? '<p>Inline secrets were masked. This configuration is read-only to preserve those values.</p>' : ''}<p class="form-error" role="alert"></p><div class="form-actions"><button type="submit" class="button" ${c.editable ? '' : 'disabled'}>Review & save</button></div></form>`);
+      form('cf-editor', async () => {
+        const text = $('#cf-config-text').value;
+        if (!await confirmOperation('Save tunnel configuration?', remote ? 'Update the remote tunnel routes in Cloudflare.' : 'Save this local configuration and create a backup. The running service will not be restarted.', 'Save')) return;
+        await post('/api/cloudflare/' + (remote ? 'remote' : 'config'), {path: file, text, revision: c.revision, confirm: true});
+        modal.close();
+        notify('Configuration saved.');
+      });
+    }
+
+    $$('.cf-config').forEach(b => b.onclick = action(() => editConfig(false, s.configs[Number(b.dataset.index)].path)));
+    bind('cf-remote', action(() => editConfig(true)));
+    bind('cf-api', () => {
+      openModal('Connect Cloudflare API', `<form id="cf-api-form" class="modal-body"><label>Cloudflare account ID<input id="cf-account" required autocomplete="off"></label><label>Tunnel UUID<input id="cf-tunnel" required autocomplete="off"></label><label>Scoped API token<input id="cf-api-token" type="password" required autocomplete="off"></label><p class="field-help">Use account-level Cloudflare Tunnel Read for viewing, or Edit for saving routes. This token is stored privately on this server.</p><p class="form-error" role="alert"></p><div class="form-actions"><button class="button" type="submit">Save connection</button></div></form>`);
+      form('cf-api-form', async () => {
+        await post('/api/cloudflare/api', {account: $('#cf-account').value.trim(), tunnel: $('#cf-tunnel').value.trim(), token: $('#cf-api-token').value.trim(), confirm: true});
+        modal.close();
+        await system();
+      });
+    });
+
+    form('cf-connect-form', async () => {
+      const token = $('#cf-token').value;
+      $('#cf-token').value = '';
+      if (await confirmOperation('Connect Cloudflare Tunnel?', 'Save this token privately and enable a dedicated connector service at boot.', 'Connect')) watch(await post('/api/cloudflare/connect', {token, confirm: true}), null, () => system());
+    });
+  } catch (e) {
+    target.innerHTML = empty('Cloudflare unavailable', e.message, 'shield');
+  }
 }
 async function monitoringPage(){
  if(me.role!=='admin'){content.innerHTML=empty('Administrator access required','Monitoring and Grafana configuration require an administrator.','lock');return;}

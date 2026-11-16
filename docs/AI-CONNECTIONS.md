@@ -107,15 +107,16 @@ features. Migrating the whole panel to an unprivileged service account requires
 additional compatibility work; the socket boundary alone does not establish that
 separation.
 
-## Full Inventory of 43 Production MCP Tools
+## Full Inventory of 44 Production MCP Tools
 
-CP-Panel advertises 43 structured tools across 7 functional domains:
+CP-Panel advertises 44 structured tools across 7 functional domains:
 
 ### 1. Developer Operations & Autonomous Toolchain (NEW)
 - `panel_apt`: Safe Ubuntu/Debian APT package management. Supports actions: `search`, `info`, `upgradable`, `simulate` (dry-run with `-s`), `update`, `install`, and `upgrade`.
 - `panel_git`: Full Git version control workflow: `clone`, `pull`, `status`, `log`, `diff`, `branch`, and `checkout`.
 - `panel_docker_build`: Build custom Docker container images with `--build-arg`, Dockerfile paths, and streaming logs.
 - `panel_test_runner`: Automated isolated rootless test runner for Node (`npm test`), Python (`pytest`), Rust (`cargo test`), and Go (`go test`) using `--network none` and read-only code mounts.
+- `panel_cloudflare_dns`: Manage Cloudflare DNS and domain routing automation for direct-IP / non-tunnel setups. Supports token verification, listing active zones, automated A-record creation with Cloudflare Orange-Cloud proxy toggle, complete 1-click Email DNS suite setup (Mail A record, MX, SPF, DMARC, DKIM), and automated Let's Encrypt / ZeroSSL TLS certificates via Cloudflare DNS-01 API challenge.
 
 ### 2. Security, Network & Threat Inspection (NEW)
 - `panel_security_inspect`: Read-only structured telemetry: Coraza WAF active rulesets and per-domain exclusions, CrowdSec decisions and registered bouncers, and Suricata IDS alerts.

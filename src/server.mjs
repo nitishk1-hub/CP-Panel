@@ -34,6 +34,7 @@ import {metrics,dockerSnapshot,confined,readText,saveText,dockerPackages,compose
 import {identityStore} from './identity.mjs';
 import {createDockerMaintenance,cleanupCommand} from './docker-maintenance.mjs';
 import {createCloudflare} from './cloudflare.mjs';
+import {createCloudflareDns} from './cloudflare-dns.mjs';
 import {createDockerWorkspace} from './docker-workspace.mjs';
 import {createGrafana,formatPrometheusMetrics} from './grafana.mjs';
 import {createGraphifyBridge} from './graphify-bridge.mjs';
@@ -70,6 +71,7 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
   const appsCatalog=createAppsCatalog({workspace,websites,jobs});
   const cloudBackup=createCloudBackup({dataDir});
   const acmeClient=createAcmeClient({dataDir});
+  const cloudflareDns=createCloudflareDns({dataDir,acmeClient});
   const cronManager=createCronManager({dataDir,cloudBackup,dockerMaintenance,acmeClient});
   const notifications=createNotifications({dataDir});
   cronManager.startScheduler();
@@ -305,6 +307,44 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
       if(req.method==='GET'&&url.pathname==='/api/cloudflare/summary'){const s=await cloudflare.status();return send(200,{installed:s.installed,health:s.health,connections:s.metrics.reduce((n,m)=>n+m.connections,0),verified:s.metrics.length>0});}
       if(url.pathname.startsWith('/api/cloudflare/')){
         admin();const endpoint=url.pathname.slice('/api/cloudflare/'.length);
+        if(endpoint.startsWith('dns/')){
+          const dnsSub=endpoint.slice('dns/'.length);
+          if(req.method==='GET'&&dnsSub==='status'){
+            const cfg=await cloudflareDns.readConfig();
+            const currentIp=await cloudflareDns.detectPublicIp();
+            return send(200,{configured:Boolean(cfg.apiToken),defaultProxied:cfg.defaultProxied??true,serverIpv4:currentIp});
+          }
+          if(req.method==='POST'&&dnsSub==='token'){
+            const b=await body(req);
+            const token=b.token?.trim();
+            if(!token)throw bad('Provide a Cloudflare API token');
+            await cloudflareDns.verifyToken(token);
+            await cloudflareDns.saveConfig({apiToken:token,defaultProxied:b.defaultProxied??true});
+            await audit('cloudflare.dns.token.configured');
+            return send(200,{ok:true,verified:true});
+          }
+          if(req.method==='GET'&&dnsSub==='zones')return send(200,await cloudflareDns.listZones());
+          if(req.method==='GET'&&dnsSub==='records'){
+            const domain=url.searchParams.get('domain');
+            if(!domain)throw bad('Query parameter "domain" required');
+            return send(200,await cloudflareDns.listRecords(domain));
+          }
+          if(req.method==='POST'&&dnsSub==='sync-web'){
+            const b=await body(req);
+            await audit('cloudflare.dns.web.synced');
+            return send(200,await cloudflareDns.syncWebDns(b));
+          }
+          if(req.method==='POST'&&dnsSub==='setup-email'){
+            const b=await body(req);
+            await audit('cloudflare.dns.email.setup');
+            return send(200,await cloudflareDns.setupEmailDns(b));
+          }
+          if(req.method==='POST'&&dnsSub==='issue-cert'){
+            const b=await body(req);
+            await audit('cloudflare.dns.cert.issued');
+            return send(200,await cloudflareDns.issueTlsWithDns(b));
+          }
+        }
         if(req.method==='GET'&&endpoint==='status')return send(200,await cloudflare.status(true));
         if(req.method==='GET'&&endpoint==='config')return send(200,await cloudflare.config(url.searchParams.get('path')));
         if(req.method==='GET'&&endpoint==='logs')return send(200,await cloudflare.logs(url.searchParams.get('id')));
