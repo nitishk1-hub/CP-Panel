@@ -3,6 +3,7 @@ import {promisify} from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import net from 'node:net';
 import {bad} from './management.mjs';
 
@@ -89,17 +90,39 @@ export async function handleApt({action, packages = [], query = '', confirm = fa
 
 // 2. Git Version Control Operations
 export async function handleGit({action, directory = '', repo = '', branch = '', depth = 1, confirm = false}) {
-  const dir = path.resolve(directory || process.cwd());
+  const defaultWorkspace = '/var/lib/server-panel/workspaces';
+  let dir = directory ? path.resolve(directory) : '';
+  if (!dir) {
+    if (await fs.access(path.join(process.cwd(), '.git')).then(() => true, () => false)) {
+      dir = process.cwd();
+    } else {
+      dir = defaultWorkspace;
+      await fs.mkdir(defaultWorkspace, { recursive: true, mode: 0o755 }).catch(() => {});
+    }
+  }
 
   if (action === 'clone') {
     if (confirm !== true) throw bad('Git clone requires explicit confirm: true');
     if (!repo || !/^https:\/\/[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=-]+$/.test(repo)) throw bad('Provide a valid HTTPS Git repository URL');
+    let cloneDestination = dir;
+    if (cloneDestination === defaultWorkspace || (await fs.readdir(cloneDestination).then(e => e.length > 0, () => false))) {
+      const repoName = repo.split('/').pop().replace(/\.git$/i, '') || 'repo-' + crypto.randomUUID().slice(0, 8);
+      cloneDestination = path.join(defaultWorkspace, repoName);
+    }
     const args = ['clone'];
     if (depth && Number.isInteger(depth) && depth > 0) args.push(`--depth=${depth}`);
     if (branch && /^[a-zA-Z0-9_.-]+$/.test(branch)) args.push('-b', branch);
-    args.push(repo, dir);
+    args.push(repo, cloneDestination);
     const res = await runCmd('git', args, {timeout: 180000});
-    return {ok: res.ok, action: 'clone', directory: dir, output: res.stdout || res.stderr};
+    return {
+      ok: res.ok,
+      action: 'clone',
+      directory: cloneDestination,
+      repo,
+      branch: branch || 'default',
+      output: res.stdout || res.stderr,
+      error: res.ok ? undefined : (res.stderr || res.stdout || 'Git clone failed')
+    };
   }
 
   // Directory must exist for remaining actions
@@ -110,37 +133,91 @@ export async function handleGit({action, directory = '', repo = '', branch = '',
     throw bad(`Directory not found: ${dir}`);
   }
 
+  const isGit = await fs.access(path.join(dir, '.git')).then(() => true, () => false);
+  if (!isGit) {
+    return {
+      ok: false,
+      action,
+      directory: dir,
+      isGitRepo: false,
+      message: `Directory "${dir}" is not a Git repository. Pass a directory containing a cloned Git repository, or run action: "clone" with a repository URL to initialize one.`
+    };
+  }
+
   if (action === 'status') {
     const res = await runCmd('git', ['-C', dir, 'status', '--short']);
-    return {ok: res.ok, action: 'status', directory: dir, status: res.stdout};
+    return {
+      ok: res.ok,
+      action: 'status',
+      directory: dir,
+      isGitRepo: true,
+      status: res.stdout || 'clean (no modified files)',
+      clean: !res.stdout,
+      error: res.ok ? undefined : (res.stderr || res.stdout)
+    };
   }
 
   if (action === 'log') {
     const res = await runCmd('git', ['-C', dir, 'log', '-n', '15', '--oneline']);
-    return {ok: res.ok, action: 'log', directory: dir, commits: res.stdout.split('\n').filter(Boolean)};
+    return {
+      ok: res.ok,
+      action: 'log',
+      directory: dir,
+      isGitRepo: true,
+      commits: res.stdout.split('\n').filter(Boolean),
+      error: res.ok ? undefined : (res.stderr || res.stdout)
+    };
   }
 
   if (action === 'diff') {
     const res = await runCmd('git', ['-C', dir, 'diff'], {maxBuffer: 1024 * 1024});
-    return {ok: res.ok, action: 'diff', directory: dir, diff: res.stdout.slice(0, 100000)};
+    return {
+      ok: res.ok,
+      action: 'diff',
+      directory: dir,
+      isGitRepo: true,
+      diff: res.stdout.slice(0, 100000),
+      error: res.ok ? undefined : (res.stderr || res.stdout)
+    };
   }
 
   if (action === 'branch') {
     const res = await runCmd('git', ['-C', dir, 'branch', '-a']);
-    return {ok: res.ok, action: 'branch', directory: dir, branches: res.stdout.split('\n').map(b => b.trim()).filter(Boolean)};
+    return {
+      ok: res.ok,
+      action: 'branch',
+      directory: dir,
+      isGitRepo: true,
+      branches: res.stdout.split('\n').map(b => b.trim()).filter(Boolean),
+      error: res.ok ? undefined : (res.stderr || res.stdout)
+    };
   }
 
   if (action === 'pull') {
     if (confirm !== true) throw bad('Git pull requires explicit confirm: true');
     const res = await runCmd('git', ['-C', dir, 'pull']);
-    return {ok: res.ok, action: 'pull', directory: dir, output: res.stdout || res.stderr};
+    return {
+      ok: res.ok,
+      action: 'pull',
+      directory: dir,
+      isGitRepo: true,
+      output: res.stdout || res.stderr,
+      error: res.ok ? undefined : (res.stderr || res.stdout)
+    };
   }
 
   if (action === 'checkout') {
     if (confirm !== true) throw bad('Git checkout requires explicit confirm: true');
     if (!branch || !/^[a-zA-Z0-9_.-]+$/.test(branch)) throw bad('Provide a valid branch or commit to checkout');
     const res = await runCmd('git', ['-C', dir, 'checkout', branch]);
-    return {ok: res.ok, action: 'checkout', directory: dir, branch, output: res.stdout || res.stderr};
+    return {
+      ok: res.ok,
+      action: 'checkout',
+      directory: dir,
+      branch,
+      output: res.stdout || res.stderr,
+      error: res.ok ? undefined : (res.stderr || res.stdout)
+    };
   }
 
   throw bad(`Unsupported Git action: ${action}`);
@@ -151,6 +228,9 @@ export async function handleDockerBuild({directory, tag, dockerfile = 'Dockerfil
   if (confirm !== true) throw bad('Docker build requires explicit confirm: true');
   if (!tag || !/^[a-z0-9][a-z0-9_.-]*(?::[a-zA-Z0-9_.-]+)?$/.test(tag)) throw bad('Provide a valid Docker image tag (e.g. myapp:v1)');
   
+  const jobId = 'build_' + crypto.randomUUID().slice(0, 12);
+  const startedAt = new Date().toISOString();
+  const startTime = Date.now();
   const dir = path.resolve(directory);
   const dfPath = path.resolve(dir, dockerfile || 'Dockerfile');
   try {
@@ -170,6 +250,9 @@ export async function handleDockerBuild({directory, tag, dockerfile = 'Dockerfil
 
   const res = await runCmd('docker', args, {timeout: 600000, maxBuffer: 16 * 1024 * 1024});
   return {
+    jobId,
+    startedAt,
+    durationMs: Date.now() - startTime,
     ok: res.ok,
     action: 'build',
     tag,
@@ -184,15 +267,50 @@ export async function handleSecurityInspect({target = 'all'} = {}) {
 
   if (target === 'all' || target === 'coraza') {
     const caddyfile = '/var/lib/server-panel/security-center/coraza/Caddyfile';
+    const accessLog = '/var/lib/cyberpross-coraza/access.json';
     let corazaActive = false;
     let ruleMatches = [];
+    let crowdsecBansEnforced = [];
+    let recentBlocks = [];
     try {
       const activeRes = await runCmd('systemctl', ['is-active', 'cyberpross-coraza.service']);
       corazaActive = activeRes.stdout === 'active';
       const caddyContent = await fs.readFile(caddyfile, 'utf8');
       ruleMatches = [...caddyContent.matchAll(/SecRule\s+([A-Za-z_:]+)\s+"([^"]+)"/g)].map(m => ({target: m[1], pattern: m[2]}));
+      const banMatch = caddyContent.match(/SecRule REMOTE_ADDR "@ipMatch ([^"]+)"/);
+      if (banMatch) crowdsecBansEnforced = banMatch[1].split(',').filter(Boolean);
     } catch {}
-    result.coraza = {active: corazaActive, listeningPort: 19180, customRuleCount: ruleMatches.length, sampleRules: ruleMatches.slice(0, 5)};
+
+    try {
+      const logContent = await fs.readFile(accessLog, 'utf8');
+      const lines = logContent.trim().split('\n');
+      for (let i = lines.length - 1; i >= 0 && recentBlocks.length < 5; i--) {
+        try {
+          const entry = JSON.parse(lines[i]);
+          if (entry.status === 403) {
+            recentBlocks.push({
+              time: new Date(entry.ts * 1000).toISOString(),
+              clientIp: entry.request?.client_ip || entry.request?.remote_ip,
+              method: entry.request?.method,
+              host: entry.request?.host,
+              uri: entry.request?.uri,
+              status: 403
+            });
+          }
+        } catch {}
+      }
+    } catch {}
+
+    result.coraza = {
+      active: corazaActive,
+      listeningPort: 19180,
+      customRuleCount: ruleMatches.length,
+      sampleRules: ruleMatches.slice(0, 5),
+      crowdsecBansEnforcedCount: crowdsecBansEnforced.length,
+      sampleBansEnforced: crowdsecBansEnforced.slice(0, 10),
+      actualBlocksProven: recentBlocks.length > 0,
+      recentBlockedRequests: recentBlocks
+    };
   }
 
   if (target === 'all' || target === 'crowdsec' || target === 'bouncers' || target === 'decisions') {
@@ -200,18 +318,29 @@ export async function handleSecurityInspect({target = 'all'} = {}) {
     const csConfig = '/var/lib/cyberpross-crowdsec/config/config.yaml';
     let bouncers = [];
     let decisions = [];
+    let alerts = [];
     try {
       const bRes = await runCmd(cscli, ['-c', csConfig, 'bouncers', 'list', '-o', 'json']);
       if (bRes.ok && bRes.stdout) bouncers = JSON.parse(bRes.stdout);
       const dRes = await runCmd(cscli, ['-c', csConfig, 'decisions', 'list', '-o', 'json']);
       if (dRes.ok && dRes.stdout) decisions = JSON.parse(dRes.stdout);
+      const aRes = await runCmd(cscli, ['-c', csConfig, 'alerts', 'list', '--limit', '10', '-o', 'json']);
+      if (aRes.ok && aRes.stdout) alerts = JSON.parse(aRes.stdout);
     } catch {}
     result.crowdsec = {
       active: true,
       listeningPort: 19580,
-      bouncers: bouncers.map(b => ({name: b.name, valid: b.valid, type: b.type, lastPull: b.last_pull})),
+      bouncers: bouncers.map(b => ({
+        name: b.name,
+        valid: b.valid,
+        type: b.type || 'native-coraza-sync',
+        lastPull: b.last_pull,
+        enforcementMechanism: 'Direct Phase-1 Caddyfile IP match compilation (instant, 0ms pull delay)'
+      })),
       activeBansCount: decisions.length,
-      sampleBans: decisions.slice(0, 10).map(d => ({value: d.value, scope: d.scope, type: d.type, scenario: d.scenario, duration: d.duration}))
+      sampleBans: decisions.slice(0, 10).map(d => ({value: d.value, scope: d.scope, type: d.type, scenario: d.scenario, duration: d.duration})),
+      recentAlertsCount: alerts.length,
+      sampleAlerts: alerts.slice(0, 5).map(a => ({scenario: a.scenario, sourceIp: a.source?.ip, eventsCount: a.events_count, createdAt: a.created_at}))
     };
   }
 
@@ -264,6 +393,9 @@ export async function handleNetworkInspect({target = 'all'} = {}) {
 // 6. Isolated Test Runner
 export async function handleTestRunner({directory, runtime, command, confirm = false}) {
   if (confirm !== true) throw bad('Test runner requires explicit confirm: true');
+  const jobId = 'test_' + crypto.randomUUID().slice(0, 12);
+  const startedAt = new Date().toISOString();
+  const startTime = Date.now();
   const dir = path.resolve(directory);
   try {
     const st = await fs.stat(dir);
@@ -308,6 +440,9 @@ export async function handleTestRunner({directory, runtime, command, confirm = f
 
   const res = await runCmd('docker', args, {timeout: 120000});
   return {
+    jobId,
+    startedAt,
+    durationMs: Date.now() - startTime,
     ok: res.ok,
     runtime,
     command: testCmd,

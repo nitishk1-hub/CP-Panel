@@ -51,6 +51,12 @@ test('handleGit validates actions and executes on local checkout', async () => {
   assert.equal(branchRes.ok, true);
   assert(branchRes.branches.some(b => b.includes('main')));
 
+  // Non-git directory check returns descriptive guidance
+  const nonGitRes = await handleGit({action: 'status', directory: '/tmp'});
+  assert.equal(nonGitRes.ok, false);
+  assert.equal(nonGitRes.isGitRepo, false);
+  assert(nonGitRes.message.includes('not a Git repository'));
+
   // Mutating action without confirm fails
   await assert.rejects(handleGit({action: 'clone', repo: 'https://github.com/test/repo.git'}), /requires explicit confirm: true/);
   await assert.rejects(handleGit({action: 'pull', directory: process.cwd()}), /requires explicit confirm: true/);
