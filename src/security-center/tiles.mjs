@@ -1,0 +1,2 @@
+import fs from 'node:fs/promises';import geojsonvt from 'geojson-vt';import vtpbf from 'vt-pbf';
+let index;export async function securityTile(z,x,y){if(![z,x,y].every(Number.isInteger)||z<0||z>5||x<0||y<0||x>=2**z||y>=2**z)throw Error('Invalid map tile');index||=new geojsonvt(JSON.parse(await fs.readFile(new URL('../../public/security-land.geojson',import.meta.url),'utf8')),{maxZoom:5,indexMaxZoom:3,indexMaxPoints:10000,tolerance:3,extent:4096});const tile=index.getTile(z,x,y);return tile?Buffer.from(vtpbf.fromGeojsonVt({land:tile})):Buffer.alloc(0);}

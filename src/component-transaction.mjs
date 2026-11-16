@@ -1,0 +1,16 @@
+import {managedCommand} from './managed-command.mjs';import {run} from './management.mjs';
+export function componentTransaction({execute=run}={}){
+ const call=(file,args,timeout=120000)=>execute(file,args,{timeout,maxBuffer:2*1024*1024,env:{PATH:'/usr/sbin:/usr/bin:/sbin:/bin',LANG:'C'}});
+ async function state(input){const operation=managedCommand({...input,action:input.kind==='docker'?'inspect':'status'});if(input.kind==='docker'){const parsed=JSON.parse(await call(operation.executable,operation.args)),c=Array.isArray(parsed)?parsed[0]:parsed;if(!c?.Id||typeof c.State?.Running!=='boolean')throw Error('Container inspection failed');return {kind:'docker',id:c.Id,running:c.State.Running};}
+  const text=await call(operation.executable,operation.args),properties=Object.fromEntries(text.trim().split('\n').map(line=>{const i=line.indexOf('=');return [line.slice(0,i),line.slice(i+1)];}));const unit=operation.args.at(-1);if(unit==='server-panel-agent.service')throw Error('The agent cannot change its own service through a transactional component operation');if(!['active','inactive','failed'].includes(properties.ActiveState))throw Error('Wait for the service to settle before changing it');const enabled=await call('/usr/bin/systemctl',['show','--property=UnitFileState','--value',unit]);return {kind:'systemd',unit,active:properties.ActiveState==='active',enabled:enabled.trim()};
+ }
+ return {requiresConfirmation:true,
+ async preflight(input){const operation=managedCommand(input);if(operation.permission!=='manage')throw Error('This operation does not change component state');await state(input);if(input.kind==='nginx')await call('/usr/sbin/nginx',['-t']);},
+ async backup(input){return state(input);},
+ async execute(input){const operation=managedCommand(input);await call(operation.executable,operation.args,operation.timeoutMs);},
+ async validate(input,backup){const current=await state(input);if(current.kind==='docker'){if(current.id!==backup.id)throw Error('Container identity changed');return {ok:current.running===(input.action!=='stop')};}if(['enable','disable'].includes(input.action))return {ok:current.active===backup.active&&(input.action==='enable'?['enabled','enabled-runtime'].includes(current.enabled):current.enabled==='disabled')};return {ok:current.active===(input.action!=='stop')};},
+ async rollback(input,backup){const current=await state(input);if(backup.kind==='docker'){if(current.id!==backup.id)throw Error('Container identity changed; refusing automatic recreation');if(current.running!==backup.running)await call('/usr/bin/docker',[backup.running?'start':'stop',backup.id]);return;}
+  if(['enable','disable'].includes(input.action)&&current.enabled!==backup.enabled){if(!['enabled','disabled','enabled-runtime'].includes(backup.enabled))throw Error('Previous boot policy requires manual restoration');await call('/usr/bin/systemctl',[backup.enabled==='disabled'?'disable':'enable',...(backup.enabled==='enabled-runtime'?['--runtime']:[]),backup.unit]);}
+  if(current.active!==backup.active)await call('/usr/bin/systemctl',[backup.active?'start':'stop',backup.unit]);const restored=await state(input);if(restored.active!==backup.active)throw Error('Previous service running state was not restored');}
+ };
+}

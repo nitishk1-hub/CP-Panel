@@ -1,0 +1,52 @@
+{
+  "name": "server-panel",
+  "version": "0.2.0-rc.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "detect": "node src/detect.mjs",
+    "test": "node --test",
+    "recover": "node src/recover.mjs",
+    "build:tools": "esbuild web/tools.mjs --bundle --minify --format=iife --global-name=PanelTools --outfile=public/tools-bundle.js && esbuild web/security-map.mjs --bundle --minify --format=iife --global-name=SecurityMap --outfile=public/security-map.js && esbuild node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs --bundle --minify --format=esm --outfile=public/security-map-worker.js",
+    "release": "npm test && npm run build:tools && node scripts/build-release.mjs",
+    "install:panel": "bash scripts/install.sh",
+    "check": "node scripts/check-source.mjs",
+    "publication:check": "node scripts/publication-check.mjs",
+    "preflight": "node scripts/preflight.mjs",
+    "workspace:status": "node scripts/workspace-status.mjs",
+    "diagnose": "node scripts/diagnose.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@codemirror/lang-css": "6.3.1",
+    "@codemirror/lang-html": "6.4.12",
+    "@codemirror/lang-javascript": "6.2.5",
+    "@codemirror/lang-json": "6.0.2",
+    "@codemirror/lang-python": "6.2.1",
+    "@codemirror/lang-yaml": "6.1.3",
+    "@codemirror/legacy-modes": "6.5.5",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "0.16.0",
+    "@xterm/xterm": "6.0.0",
+    "codemirror": "6.0.2",
+    "esbuild": "0.28.2",
+    "express": "5.2.1",
+    "geojson-vt": "5.0.4",
+    "ipaddr.js": "2.2.0",
+    "maplibre-gl": "6.18.0",
+    "maxmind": "5.1.0",
+    "node-pty": "1.1.0",
+    "otpauth": "9.6.0",
+    "pg": "8.23.1",
+    "qrcode": "1.5.4",
+    "vt-pbf": "3.1.3",
+    "ws": "8.23.0",
+    "yaml": "2.8.3"
+  },
+  "author": "CyberPross"
+}

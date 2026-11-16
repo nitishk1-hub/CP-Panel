@@ -1,0 +1,2 @@
+import fs from 'node:fs/promises';import path from 'node:path';import {verifyRelease} from '../src/release-integrity.mjs';
+const root=path.resolve(process.argv[2]),key=process.argv[3];if(!key)throw Error('A trusted release public key is required');const result=await verifyRelease(root,await fs.readFile(key));console.log('Verified signed application files and Node binary. Signing key fingerprint: '+result.fingerprint);

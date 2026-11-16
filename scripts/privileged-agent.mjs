@@ -1,0 +1,13 @@
+import {createHealthMonitor} from '../src/health-monitor.mjs';
+import fs from 'node:fs/promises';
+import {createPrivilegedAgent} from '../src/privileged-agent.mjs';
+const keyFile='/etc/server-panel/agent.key';
+const st=await fs.lstat(keyFile);
+if(!st.isFile()||st.isSymbolicLink()||st.uid!==0||(st.mode&0o077))throw Error('Unsafe agent credential');
+const environment=await fs.readFile('/etc/server-panel/environment','utf8');
+const port=/^PANEL_PORT=(\d+)$/m.exec(environment)?.[1]||'8787',origin=/^PANEL_PUBLIC_URL=(https:\/\/[^\s]+)$/m.exec(environment)?.[1];
+const urls=['http://127.0.0.1:'+port+'/api/health',...(origin?[new URL('/api/health',origin).href]:[])];
+const health=await createHealthMonitor({directory:'/var/lib/server-panel/operations/health',urls});
+const service=await createPrivilegedAgent({socketPath:'/run/server-panel-agent/control.sock',directory:'/var/lib/server-panel/operations',secret:await fs.readFile(keyFile),health});
+health.start();
+let stopping=false;for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{if(stopping)return;stopping=true;await health.close();await service.close();});

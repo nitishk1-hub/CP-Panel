@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem without credentials or private host details.
+body:
+  - type: markdown
+    attributes:
+      value: Do not disclose vulnerabilities here. Read SECURITY.md for private reporting.
+  - type: input
+    id: version
+    attributes:
+      label: Panel version and installation profile
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Distro, version and CPU architecture
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps, expected behavior and observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Review the output before sharing. Do not attach runtime data, backups, tokens or full configuration.

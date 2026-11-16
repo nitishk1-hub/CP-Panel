@@ -1,0 +1,39 @@
+node_modules/
+var/
+.env
+coverage/
+.release-keys/
+.review-state/
+.env.*
+!.env.example
+dist/
+graphify-out/
+*.log
+*.dump
+*.sql.gz
+*.aes
+*-readiness.json
+*-report.json
+docs/DEPENDENCY-SBOM.json
+
+# Local browser captures; publish reviewed images under docs/assets instead.
+/*.png
+/*.jpg
+/*.jpeg
+
+# Local agent/cloud tooling is not part of the distributed panel.
+.agents/
+skills-lock.json
+.codex/
+.aws/
+
+# Generated local release metadata and dated host-delivery notes.
+/BUILD.json
+/SECURITY-AUDIT.json
+/RELEASE-MANIFEST.json
+/RELEASE-MANIFEST.sig
+/*-DELIVERY*.md
+/DELIVERY-REPORT*.md
+/NATIVE-CLEANUP-*.md
+/SECURITY-REVIEW-*.md
+/CYBERPROSS-EXPLOIT-BLOCKING-*.md

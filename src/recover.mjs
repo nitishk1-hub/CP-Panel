@@ -1,0 +1,11 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+const dir=path.resolve(process.env.PANEL_DATA_DIR||path.join(path.dirname(fileURLToPath(import.meta.url)),'../var'));
+const username=process.argv[2]||'admin';
+const users=JSON.parse(await fs.readFile(path.join(dir,'users.json'),'utf8'));
+if(!users.some(u=>u.username===username&&u.enabled&&(u.authSource||'local')==='local'))throw new Error('Enabled local account not found');
+const token=crypto.randomBytes(32).toString('base64url');
+await fs.writeFile(path.join(dir,'console-recovery.json'),JSON.stringify({username,hash:crypto.createHash('sha256').update(token).digest('hex'),expires:Date.now()+15*60000}),{mode:0o600});
+console.log(`One-use recovery code for ${username} (expires in 15 minutes):\n${token}\nOpen the panel, select Recover account, and choose a new password. Existing sessions are revoked on recovery.`);

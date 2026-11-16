@@ -1,0 +1,9 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+export function createAudit({dataDir,maxBytes=4*1024*1024,retained=3,readBytes=256*1024}={}){
+ const file=path.join(dataDir,'audit.jsonl');let queue=Promise.resolve();
+ async function safeFile(name){const st=await fs.lstat(name).catch(e=>{if(e.code==='ENOENT')return null;throw e;});if(st&&(!st.isFile()||st.isSymbolicLink()||st.nlink!==1||st.uid!==process.getuid?.()||(st.mode&0o077)))throw Error('Audit file ownership or permissions are unsafe');return st;}
+ async function tail(limit=100){await queue;const st=await safeFile(file);if(!st)return [];const fd=await fs.open(file,'r');try{const start=Math.max(0,st.size-readBytes),buffer=Buffer.alloc(Math.min(st.size,readBytes));const {bytesRead}=await fd.read(buffer,0,buffer.length,start);const lines=buffer.subarray(0,bytesRead).toString('utf8').split('\n');if(start)lines.shift();return lines.filter(Boolean).slice(-Math.min(100,limit)).flatMap(line=>{try{return [JSON.parse(line)];}catch{return [];}});}finally{await fd.close();}}
+ function write(action,actor,details={}){const next=queue.then(async()=>{await fs.mkdir(dataDir,{recursive:true,mode:0o700});const st=await safeFile(file);if(st&&st.size>=maxBytes){for(let i=retained;i>=1;i--){const from=i===1?file:file+'.'+(i-1),to=file+'.'+i;await safeFile(from);await safeFile(to);if(i===retained)await fs.rm(to,{force:true});await fs.rename(from,to).catch(e=>{if(e.code!=='ENOENT')throw e;});}}const record={time:new Date().toISOString(),actor:String(actor).slice(0,200),action:String(action).slice(0,200)};for(const key of ['target','outcome','requestId'])if(typeof details[key]==='string')record[key]=details[key].replace(/[\x00-\x1f]/g,' ').slice(0,200);await fs.appendFile(file,JSON.stringify(record)+'\n',{mode:0o600});});queue=next.catch(()=>{});return next;}
+ return {write,tail,close:()=>queue};
+}
