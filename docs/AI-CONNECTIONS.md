@@ -5,8 +5,8 @@ Open **System → AI connections**. The primary connection is the remote MCP URL
 ```json
 {
   "mcpServers": {
-    "cyberpross": {
-      "url": "https://cyber.cyberpross.cc/mcp"
+    "cp-panel": {
+      "url": "https://<your-panel-domain>/mcp"
     }
   }
 }

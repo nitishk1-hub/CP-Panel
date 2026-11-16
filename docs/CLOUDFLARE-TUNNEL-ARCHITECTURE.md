@@ -23,7 +23,7 @@ In traditional web hosting:
 ```
 +-------------------------------------------------------------------------------+
 |                             PUBLIC INTERNET                                   |
-|   Visitor / Browser (https://cyber.cyberpross.cc or https://n8n.cyberpross.cc) |
+|   Visitor / Browser (https://panel.<your-domain> or https://app.<your-domain>) |
 +---------------------------------------+---------------------------------------+
                                         | (HTTPS / TLS 1.3)
                                         v
@@ -41,14 +41,14 @@ In traditional web hosting:
 |                                                                               |
 |   [cloudflared.service] (Systemd connector: /usr/local/bin/cloudflared)       |
 |            |                                                                  |
-|            +----> Hostname: cyber.cyberpross.cc  --> http://127.0.0.1:8787     |
+|            +----> Hostname: panel.<your-domain>  --> http://127.0.0.1:8787    |
 |            |      (Server Panel UI & MCP API Gateway)                         |
 |            |                                                                  |
-|            +----> Hostname: *.cyberpross.cc       --> http://127.0.0.1:19180    |
+|            +----> Hostname: *.<your-domain>       --> http://127.0.0.1:19180   |
 |            |      (Coraza WAF & OpenResty Virtual Host Engine)                |
 |            |              |                                                   |
-|            |              +--> n8n.cyberpross.cc     -> http://127.0.0.1:5678 |
-|            |              +--> grafana.cyberpross.cc -> http://127.0.0.1:3030 |
+|            |              +--> app.<your-domain>     -> http://127.0.0.1:5678 |
+|            |              +--> grafana.<your-domain> -> http://127.0.0.1:3030 |
 |            |              +--> Static Websites       -> Local Document Roots  |
 |            |                                                                  |
 |            +----> Inbound Firewall: DENY ALL EXTERNAL INBOUND PORTS           |
@@ -77,15 +77,15 @@ When deploying a new application (e.g. from the 1-Click App Catalog) or creating
 ### Step 1: Deploy App or Proxy in the Panel
 - Deploy the app (e.g. `n8n` on port `5678`, `Nextcloud` on port `8080`, or `WordPress`).
 - The panel binds the container or service to `127.0.0.1:<port>`.
-- If a domain is specified (e.g., `n8n.cyberpross.cc`), the panel sets up a virtual host reverse proxy in OpenResty / Coraza WAF (`127.0.0.1:19180`).
+- If a domain is specified (e.g., `app.<your-domain>`), the panel sets up a virtual host reverse proxy in OpenResty / Coraza WAF (`127.0.0.1:19180`).
 
 ### Step 2: Route Public Hostname in Cloudflare
 In the **Cloudflare Zero Trust Dashboard**:
 1. Navigate to **Networks** &rarr; **Tunnels**.
-2. Select your active tunnel (e.g., `0a8639da-415c-46ac-89cc-d2e3810f8ce8` for `cyberpross.cc`).
+2. Select your active tunnel.
 3. Under **Public Hostnames**, click **Add a public hostname**:
-   - **Subdomain**: `n8n` (or your chosen subdomain)
-   - **Domain**: `cyberpross.cc`
+   - **Subdomain**: `app` (or your chosen subdomain)
+   - **Domain**: `<your-domain>`
    - **Path**: Leave blank
    - **Type**: `HTTP`
    - **URL**: `127.0.0.1:19180` (routes through Coraza WAF) or `127.0.0.1:5678` (direct to app)
