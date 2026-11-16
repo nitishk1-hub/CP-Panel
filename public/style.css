@@ -612,9 +612,29 @@ html[data-theme="dark"] .security-kpi-card {
   margin-top: 6px;
 }
 
-/* Security Tabs */
-.security-tabs {
+/* Workspace Sub-Navigation Tabs */
+.website-tabs,
+.database-tabs,
+.security-tabs,
+.docker-tabs,
+.system-tabs {
   margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  backdrop-filter: blur(12px);
+}
+.tabs .tab .badge {
+  margin-left: 6px;
+  background: var(--surface-alt);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.tabs .tab.active .badge {
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 600;
 }
 
 /* Engine Grid */

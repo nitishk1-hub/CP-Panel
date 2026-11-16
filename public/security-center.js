@@ -93,6 +93,22 @@ async function securityCenterPage(){
   :pill('Protection Bypassed','red');
 
  content.innerHTML=`
+  <!-- Modern Navigation Sub-Tabs -->
+  <div class="tabs security-tabs" role="tablist" aria-label="Security Center categories">
+   <button class="tab ${securitySection==='map'?'active':''}" data-sec-tab="map" type="button" role="tab" aria-selected="${securitySection==='map'}">
+    ${icon('globe')} Threat Intelligence Map <span class="badge" id="sec-badge-map">${locations.length}</span>
+   </button>
+   <button class="tab ${securitySection==='access'?'active':''}" data-sec-tab="access" type="button" role="tab" aria-selected="${securitySection==='access'}">
+    ${icon('shield')} Access Control &amp; IP Reputation <span class="badge" id="sec-badge-access">${decisions.length + recentBlocked.length}</span>
+   </button>
+   <button class="tab ${securitySection==='domains'?'active':''}" data-sec-tab="domains" type="button" role="tab" aria-selected="${securitySection==='domains'}">
+    ${icon('network')} Domain WAF Policies <span class="badge" id="sec-badge-domains">${domainOverrides.length}</span>
+   </button>
+   <button class="tab ${securitySection==='maintenance'?'active':''}" data-sec-tab="maintenance" type="button" role="tab" aria-selected="${securitySection==='maintenance'}">
+    ${icon('server')} Security Engines &amp; Signatures
+   </button>
+  </div>
+
   <!-- Enterprise Cybersecurity Posture Banner -->
   <div class="security-hero-banner">
    <div class="security-hero-status">
@@ -166,26 +182,10 @@ async function securityCenterPage(){
    </div>
   </div>
 
-  <!-- Modern Navigation Sub-Tabs -->
-  <div class="tabs security-tabs" role="tablist">
-   <button class="tab ${securitySection==='map'?'active':''}" data-sec-tab="map" type="button" role="tab" aria-selected="${securitySection==='map'}">
-    ${icon('globe')} Threat Intelligence Map <span class="badge" id="sec-badge-map">${locations.length}</span>
-   </button>
-   <button class="tab ${securitySection==='access'?'active':''}" data-sec-tab="access" type="button" role="tab" aria-selected="${securitySection==='access'}">
-    ${icon('shield')} Access Control &amp; IP Reputation <span class="badge" id="sec-badge-access">${decisions.length + recentBlocked.length}</span>
-   </button>
-   <button class="tab ${securitySection==='domains'?'active':''}" data-sec-tab="domains" type="button" role="tab" aria-selected="${securitySection==='domains'}">
-    ${icon('network')} Domain WAF Policies <span class="badge" id="sec-badge-domains">${domainOverrides.length}</span>
-   </button>
-   <button class="tab ${securitySection==='maintenance'?'active':''}" data-sec-tab="maintenance" type="button" role="tab" aria-selected="${securitySection==='maintenance'}">
-    ${icon('server')} Security Engines &amp; Signatures
-   </button>
-  </div>
-
-  <!-- Tab Content Containers -->
-  <div id="security-tab-content">
-   ${renderActiveTab()}
-  </div>
+   <!-- Tab Content Containers -->
+   <div id="security-tab-content">
+    ${renderActiveTab()}
+   </div>
  `;
 
  function renderActiveTab(){
@@ -404,6 +404,13 @@ async function securityCenterPage(){
     b.classList.toggle('active',sel);
     if(sel)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
    });
+   const securityTitles={
+    map:['Threat Intelligence Map','Autonomous Edge Firewall, Coraza WAF, Suricata IDS & Threat Mesh','Security Center / Threat Map'],
+    access:['Access Control & IP Reputation','Rapid IP triage, zero-trust allowlisting and CrowdSec active bans','Security Center / Access Control'],
+    domains:['Domain WAF Policies','Virtual host Coraza WAF rulesets, false-positive exclusions and CRS sensitivity','Security Center / Domain WAF'],
+    maintenance:['Security Engines & Signatures','Coraza WAF, Suricata Network IDS, CrowdSec Threat Mesh and GeoIP database health','Security Center / Engines & Signatures']
+   };
+   if(securityTitles[securitySection])setHeading(...securityTitles[securitySection]);
    securityCenterPage();
   };
  });

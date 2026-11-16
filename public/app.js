@@ -95,9 +95,44 @@ function chartMarkup(){const width=Math.max(300,Math.floor($('#resource-chart')?
 async function overview(id){return hostOverview(id);}
 function simpleContainerTable(containers,stats,actions=false){return `<div class="table-wrap"><table class="container-table"><thead><tr><th>CONTAINER</th><th>STATUS</th><th>PUBLISHED PORTS</th><th>NETWORKS</th><th>CPU / RAM</th>${actions?'<th>ACTIONS</th>':''}</tr></thead><tbody>${containers.map(c=>{const s=stats.find(x=>x.Name===c.Names),running=c.State==='running';return `<tr><td data-label="Container"><div class="table-name"><span class="table-icon">${icon('docker')}</span><span>${me.role==='admin'?`<button class="container-details-link text-button" title="${esc(c.Names)}" data-id="${c.ID}">${esc(c.Names)}</button>`:`<strong>${esc(c.Names)}</strong>`}<small title="${esc(c.Image)}">${esc(c.Image)}</small>${c.Project?`<small>${esc(c.Project)} / ${esc(c.Service)}</small>`:''}</span></div></td><td data-label="Status">${pill(running?'Running':c.State||'Stopped',running?'green':'')}<small>${esc(c.Status)}</small></td><td data-label="Published ports">${portsMarkup(c)}</td><td data-label="Networks">${networksMarkup(c.Networks)}</td><td data-label="CPU / Memory">${s?esc(s.CPUPerc):'—'}<small>${s?esc(s.MemUsage.split(' / ')[0]):'—'}</small></td>${actions?`<td data-label="Actions"><div class="row-actions">${[[running?'stop':'start',running?'stop':'play',running?'Stop':'Start'],['restart','refresh','Restart']].map(([a,i,t])=>`<button class="icon-button container-action ${a==='stop'?'danger':''}" data-id="${esc(c.ID)}" data-action="${a}" data-name="${esc(c.Names)}" title="${t} container" aria-label="${t} ${esc(c.Names)}" ${me.role==='viewer'?'disabled':''}>${icon(i)}</button>`).join('')}${me.role==='admin'?`<button class="icon-button container-details-link" data-id="${c.ID}" title="Details, logs and settings" aria-label="Details for ${esc(c.Names)}">${icon('info')}</button>`:''}</div></td>`:''}</tr>`;}).join('')}</tbody></table></div>`;}
 async function watch(job,target=null,onComplete=null){activeJob=job.id;const id=generation;const output=target||$('#job-output');if(!target){openModal(job.title,`<div class="modal-body"><div id="job-state">${pill('Running','blue')}</div><pre id="job-output"></pre></div><div class="form-actions">${button('job-close','Close',null)}</div>`);bind('job-close',()=>modal.close());}const tick=async()=>{if(id!==generation)return;try{const j=await api('/api/jobs?id='+encodeURIComponent(job.id));const el=target||$('#job-output');if(el)el.textContent=j.output||'Waiting for output…';if($('#job-state'))$('#job-state').innerHTML=pill(j.state,j.state==='succeeded'?'green':j.state==='failed'?'red':'blue');if(['queued','running'].includes(j.state))setTimeout(tick,1000);else{activeJob=null;if(onComplete)await onComplete(j);notify(j.state==='succeeded'?'Operation completed.':'Operation failed. Check the output for details.');}}catch(e){notify(e.message);}};tick();}
+function dockerNavTabs(){
+ return `<div class="tabs docker-tabs" role="tablist" aria-label="Docker sections">
+  <button class="tab ${dockerTab==='containers'?'active':''}" data-docker-subtab="containers" type="button" role="tab" aria-selected="${dockerTab==='containers'}">${icon('docker')} Containers</button>
+  <button class="tab ${dockerTab==='apps'?'active':''}" data-docker-subtab="apps" type="button" role="tab" aria-selected="${dockerTab==='apps'}">${icon('overview')} 1-Click App Store</button>
+  <button class="tab ${dockerTab==='compose'?'active':''}" data-docker-subtab="compose" type="button" role="tab" aria-selected="${dockerTab==='compose'}">${icon('file')} Compose projects</button>
+  <button class="tab ${dockerTab==='networks'?'active':''}" data-docker-subtab="networks" type="button" role="tab" aria-selected="${dockerTab==='networks'}">${icon('network')} Networks</button>
+  <button class="tab ${dockerTab==='images'?'active':''}" data-docker-subtab="images" type="button" role="tab" aria-selected="${dockerTab==='images'}">${icon('docker')} Images</button>
+  <button class="tab ${dockerTab==='volumes'?'active':''}" data-docker-subtab="volumes" type="button" role="tab" aria-selected="${dockerTab==='volumes'}">${icon('disk')} Volumes</button>
+  <button class="tab ${dockerTab==='cleanup'?'active':''}" data-docker-subtab="cleanup" type="button" role="tab" aria-selected="${dockerTab==='cleanup'}">${icon('trash')} Storage &amp; cleanup</button>
+ </div>`;
+}
+
+function bindDockerSubnav(){
+ $$('[data-docker-subtab]').forEach(b=>{
+  b.onclick=action(async()=>{
+   dockerTab=b.dataset.dockerSubtab;
+   if(typeof syncRouteState==='function')syncRouteState();
+   $$('[data-docker-nav]').forEach(sb=>{
+    const active=sb.dataset.dockerNav===dockerTab;
+    sb.classList.toggle('active',active);
+    if(active)sb.setAttribute('aria-current','page');else sb.removeAttribute('aria-current');
+   });
+   const dockerTitles={containers:['Containers','Live container state, published ports and resource consumption','Docker / Containers'],apps:['1-Click App Store','Curated open-source Docker application catalog with 1-click deployment','Docker / 1-Click App Store'],compose:['Compose projects','Multi-container stacks, environment files and image updates','Docker / Compose projects'],networks:['Container networks','Bridge, host and custom overlay networks','Docker / Networks'],images:['Container images','Cached images, tags and registry pulls','Docker / Images'],volumes:['Persistent volumes','Named volumes and mount points','Docker / Volumes'],cleanup:['Storage & cleanup','Reclaim unused images and build cache safely','Docker / Storage & cleanup']};
+   if(dockerTitles[dockerTab])setHeading(...dockerTitles[dockerTab]);
+   $$('[data-docker-subtab]').forEach(tb=>{
+    const sel=tb.dataset.dockerSubtab===dockerTab;
+    tb.classList.toggle('active',sel);
+    tb.setAttribute('aria-selected',String(sel));
+   });
+   dockerPanel();
+  });
+ });
+}
+
 async function docker(id){content.innerHTML='<div class="loading-state">Reading containers and Compose projects…</div>';const d=await api('/api/docker');if(id!==generation)return;dockerData=d;$('#container-count').textContent=d.containers.length||'';
  $$('[data-docker-nav]').forEach(b=>{const active=b.dataset.dockerNav===dockerTab;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
- content.innerHTML=`${d.errors?.length?notice('Some Docker details could not be read: '+d.errors.join(' ').slice(0,1000),'warning'):''}${!d.available?notice(d.installed?'Docker is installed, but this process cannot reach the engine. Check Docker permissions and service status.':'Docker Engine is not installed. Install it with Compose to start managing containers.','warning'):''}<div class="system-status-strip"><div><span>Engine status</span><strong>${pill(d.available?'Online · '+(d.version||'Docker'):'Unavailable',d.available?'green':'amber')}</strong></div><div><span>Running containers</span><strong>${d.containers.filter(c=>c.State==='running').length} / ${d.containers.length}</strong></div><div><span>Compose stacks</span><strong>${d.projects.length}</strong></div><div><span>Engine maintenance</span><strong>${me.role==='admin'?button('packages',d.installed?'Update engine':'Install Docker',d.installed?'refresh':'plus','secondary small'):'Read-only'}</strong></div></div><div class="card management-card" id="docker-panel"></div>`;
+ content.innerHTML=`${dockerNavTabs()}${d.errors?.length?notice('Some Docker details could not be read: '+d.errors.join(' ').slice(0,1000),'warning'):''}${!d.available?notice(d.installed?'Docker is installed, but this process cannot reach the engine. Check Docker permissions and service status.':'Docker Engine is not installed. Install it with Compose to start managing containers.','warning'):''}<div class="system-status-strip"><div><span>Engine status</span><strong>${pill(d.available?'Online · '+(d.version||'Docker'):'Unavailable',d.available?'green':'amber')}</strong></div><div><span>Running containers</span><strong>${d.containers.filter(c=>c.State==='running').length} / ${d.containers.length}</strong></div><div><span>Compose stacks</span><strong>${d.projects.length}</strong></div><div><span>Engine maintenance</span><strong>${me.role==='admin'?button('packages',d.installed?'Update engine':'Install Docker',d.installed?'refresh':'plus','secondary small'):'Read-only'}</strong></div></div><div class="card management-card" id="docker-panel"></div>`;
+ bindDockerSubnav();
  bind('packages',async()=>{if(!await confirmOperation(d.installed?'Update Docker Engine?':'Install Docker & Compose?',d.installed?'Package updates may restart Docker and interrupt running containers.':'This installs Docker and Compose from configured signed Ubuntu repositories. Existing administrator permissions are required.',d.installed?'Update Docker':'Install'))return;watch(await post('/api/docker/packages',{action:d.installed?'update':'install'}));});dockerPanel();
  poll=setInterval(async()=>{try{const next=await api('/api/docker');if(id!==generation)return;dockerData=next;if(dockerTab==='containers')containerRows();}catch(e){if(id===generation)notify(e.message);}},5000);
 }
@@ -121,9 +156,42 @@ async function cleanupPanel(){
 }
 function containerRows(){if(!$('#container-rows'))return;const active=document.activeElement,focusKey=active?.closest('#container-rows')?{id:active.dataset.id,action:active.dataset.action,classes:active.className}:null;const previousScroll=$('#container-rows .table-wrap')?.scrollLeft||0;const q=$('#container-search').value.toLowerCase(),filter=$('#container-filter').value;const rows=dockerData.containers.filter(c=>(c.Names+' '+c.Image).toLowerCase().includes(q)&&(filter==='all'||(filter==='running'?c.State==='running':c.State!=='running')));$('#container-rows').innerHTML=rows.length?simpleContainerTable(rows,dockerData.stats,true):empty('No matching containers','Try a different search or status filter.','docker');bindContainerLinks();$('#container-result-count').textContent=`Showing ${rows.length} of ${dockerData.containers.length} containers`;$$('.container-action').forEach(b=>b.onclick=action(async()=>{if(!await confirmOperation(`${b.dataset.action[0].toUpperCase()+b.dataset.action.slice(1)} container?`,`${b.dataset.name} will be ${b.dataset.action==='stop'?'stopped':b.dataset.action==='start'?'started':'restarted'}.`,b.dataset.action))return;b.disabled=true;await post('/api/docker/action',{id:b.dataset.id,action:b.dataset.action});dockerData=await api('/api/docker');containerRows();notify('Container operation completed.');}));if(focusKey){const next=[...document.querySelectorAll('#container-rows button')].find(b=>b.dataset.id===focusKey.id&&b.dataset.action===focusKey.action&&b.className===focusKey.classes);next?.focus({preventScroll:true});}const wrap=$('#container-rows .table-wrap');if(wrap)wrap.scrollLeft=previousScroll;}
 async function editFile(url,label){const data=await api(url);openModal('Edit configuration',`<form id="editor-form"><div class="modal-body"><p class="field-help mono">${esc(label)}</p><textarea id="file-text" aria-label="File contents" spellcheck="false">${esc(data.text)}</textarea><p class="field-help">A backup is created before saving. External changes are checked to prevent accidental overwrites.</p><p class="form-error" role="alert"></p></div><div class="form-actions">${button('editor-cancel','Cancel',null)}<button type="submit" class="button">${icon('check')}Save changes</button></div></form>`,'editor');bind('editor-cancel',()=>modal.close());form('editor-form',async()=>{const result=await post(url,{text:$('#file-text').value,revision:data.revision});modal.close();notify('File saved. Backup: '+result.backup);});}
+function systemNavTabs(){
+ return `<div class="tabs system-tabs" role="tablist" aria-label="System tools">
+  <button class="tab ${sub==='firewall'?'active':''}" data-sys-subtab="firewall" type="button" role="tab" aria-selected="${sub==='firewall'}">${icon('shield')} Firewall</button>
+  <button class="tab ${sub==='terminal'?'active':''}" data-sys-subtab="terminal" type="button" role="tab" aria-selected="${sub==='terminal'}">${icon('terminal')} Terminal</button>
+  <button class="tab ${sub==='files'?'active':''}" data-sys-subtab="files" type="button" role="tab" aria-selected="${sub==='files'}">${icon('folder')} File manager</button>
+  <button class="tab ${sub==='backups'?'active':''}" data-sys-subtab="backups" type="button" role="tab" aria-selected="${sub==='backups'}">${icon('disk')} Cloud Backups &amp; S3</button>
+  <button class="tab ${sub==='cron'?'active':''}" data-sys-subtab="cron" type="button" role="tab" aria-selected="${sub==='cron'}">${icon('clock')} Crontab Tasks</button>
+  <button class="tab ${sub==='notifications'?'active':''}" data-sys-subtab="notifications" type="button" role="tab" aria-selected="${sub==='notifications'}">${icon('overview')} Notifications</button>
+  <button class="tab ${sub==='tunnel'?'active':''}" data-sys-subtab="tunnel" type="button" role="tab" aria-selected="${sub==='tunnel'}">${icon('shield')} Cloudflare Tunnel</button>
+  <button class="tab ${sub==='wireguard'?'active':''}" data-sys-subtab="wireguard" type="button" role="tab" aria-selected="${sub==='wireguard'}">${icon('network')} WireGuard</button>
+  <button class="tab ${sub==='readiness'?'active':''}" data-sys-subtab="readiness" type="button" role="tab" aria-selected="${sub==='readiness'}">${icon('check')} Readiness</button>
+  <button class="tab ${sub==='ai'?'active':''}" data-sys-subtab="ai" type="button" role="tab" aria-selected="${sub==='ai'}">${icon('key')} AI connections</button>
+  <button class="tab ${sub==='access'?'active':''}" data-sys-subtab="access" type="button" role="tab" aria-selected="${sub==='access'}">${icon('globe')} Panel address</button>
+ </div>`;
+}
+
+function bindSystemSubnav(){
+ $$('[data-sys-subtab]').forEach(b=>{
+  b.onclick=action(async()=>{
+   sub=b.dataset.sysSubtab;
+   if(typeof syncRouteState==='function')syncRouteState();
+   $$('[data-system-nav]').forEach(sb=>{
+    const active=sb.dataset.systemNav===sub;
+    sb.classList.toggle('active',active);
+    if(active)sb.setAttribute('aria-current','page');else sb.removeAttribute('aria-current');
+   });
+   const systemTitles={firewall:['Firewall','UFW host packet filtering and port rules','System / Firewall'],terminal:['Terminal','Interactive root PTY shell, quick diagnostics and session logging','System / Terminal'],files:['File manager','Browse, edit, upload and atomically manage server files','System / File manager'],backups:['Cloud Backups & S3','Automated multi-target S3/R2 cloud backups with AES-256 encryption','System / Backups'],cron:['Crontab Tasks','Autonomous task scheduler, periodic maintenance and command execution','System / Crontab'],notifications:['Alert Notifications','Multi-channel dispatches (Telegram, Discord, Slack, SMTP)','System / Notifications'],tunnel:['Cloudflare Tunnel','Outbound edge connectors and public hostname routing','System / Cloudflare Tunnel'],wireguard:['WireGuard VPN','Private encrypted mesh interfaces and split-tunnel client profiles','System / WireGuard'],readiness:['Production readiness','Automated verification checks and release integrity','System / Readiness'],ai:['AI connections','Remote MCP server access, OAuth clients and Graphify tools','System / AI connections'],access:['Panel address','Trusted HTTPS origin for authentication, cookies and WebSockets','System / Panel address']};
+   if(systemTitles[sub])setHeading(...systemTitles[sub]);
+   await system();
+  });
+ });
+}
+
 async function system(){disposeSystemTools();if(me.role!=='admin'){content.innerHTML=empty('Administrator access required','Your account can view resources and containers. System tools require an administrator.','lock');return;}
  $$('[data-system-nav]').forEach(b=>{const active=b.dataset.systemNav===sub;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
- const hostAccess=await api('/api/host/status');content.innerHTML=`${hostAccessCard(hostAccess)}<div id="system-content"></div>`;bind('host-admin-setup',()=>hostAdminSetup(hostAccess));
+ const hostAccess=await api('/api/host/status');content.innerHTML=`${systemNavTabs()}${hostAccessCard(hostAccess)}<div id="system-content"></div>`;bind('host-admin-setup',()=>hostAdminSetup(hostAccess));bindSystemSubnav();
  if(sub==='wireguard')await wireguardPage();
  if(sub==='grafana')await grafanaPage();
  if(sub==='readiness')await readinessPage();

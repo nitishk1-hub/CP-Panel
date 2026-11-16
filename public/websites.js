@@ -6,7 +6,67 @@ function updateSidebarControl(){const mobile=matchMedia('(max-width:700px)').mat
 function toggleSidebar(){if(matchMedia('(max-width:700px)').matches)document.body.classList.toggle('nav-open');else{const hidden=document.body.classList.toggle('sidebar-collapsed');try{localStorage.setItem('panel-sidebar-hidden',hidden?'yes':'no');}catch{}}updateSidebarControl();}
 const websiteType=t=>({static:'Static',node:'Node.js',python:'Python',php:'PHP',proxy:'Reverse proxy'}[t]||t);
 const websiteState=s=>s.archived?pill('Archived'):s.state==='published'?pill(['static','proxy'].includes(s.type)?'Published':s.runtimeState==='running'?'Running':s.runtimeState||'Published',['static','proxy'].includes(s.type)||s.runtimeState==='running'?'green':'amber'):pill(s.state==='draft'?'Draft':'Stopped');
-async function websitesPage(id){if(me.role!=='admin'){content.innerHTML=empty('Administrator access required','Website management requires an administrator account.','lock');return;}websiteCurrent=null;const [d,engineStatus]=await Promise.all([api('/api/websites'),api('/api/web-engine')]);if(id!==generation)return;d.webEngine=engineStatus;websitesInventory=d;content.innerHTML=`<div id="websites-content"></div>`;if(websiteTab==='runtimes')renderWebsiteRuntimes(d);else if(websiteTab==='engine')renderWebEngine(d);else renderWebsiteList(d);}
+
+function websiteNavTabs(d){
+  const managed = d?.sites || [];
+  const external = d?.external || [];
+  const total = managed.filter(s=>!s.archived).length + external.length;
+  const proxyCount = [...managed,...external].filter(s=>(s.managed?s.type:({'Static':'static','PHP':'php','Reverse proxy':'proxy'}[s.type]))==='proxy').length;
+  const staticCount = [...managed,...external].filter(s=>(s.managed?s.type:({'Static':'static','PHP':'php','Reverse proxy':'proxy'}[s.type]))==='static').length;
+  const nodeCount = [...managed,...external].filter(s=>(s.managed?s.type:({'Static':'static','PHP':'php','Reverse proxy':'proxy'}[s.type]))==='node').length;
+  const phpCount = [...managed,...external].filter(s=>(s.managed?s.type:({'Static':'static','PHP':'php','Reverse proxy':'proxy'}[s.type]))==='php').length;
+  const pythonCount = [...managed,...external].filter(s=>(s.managed?s.type:({'Static':'static','PHP':'php','Reverse proxy':'proxy'}[s.type]))==='python').length;
+  const runtimesCount = ['node','python','php'].filter(t=>d?.runtimes?.[t]?.installed).length;
+
+  return `<div class="tabs website-tabs" role="tablist" aria-label="Website categories">
+   <button class="tab ${websiteTab==='sites'&&websiteCategory==='all'?'active':''}" data-website-subtab="all" data-website-parent="sites" type="button" role="tab" aria-selected="${websiteTab==='sites'&&websiteCategory==='all'}">
+    ${icon('globe')} All websites <span class="badge">${total}</span>
+   </button>
+   <button class="tab ${websiteTab==='sites'&&websiteCategory==='proxy'?'active':''}" data-website-subtab="proxy" data-website-parent="sites" type="button" role="tab" aria-selected="${websiteTab==='sites'&&websiteCategory==='proxy'}">
+    ${icon('network')} Reverse proxy <span class="badge">${proxyCount}</span>
+   </button>
+   <button class="tab ${websiteTab==='sites'&&websiteCategory==='static'?'active':''}" data-website-subtab="static" data-website-parent="sites" type="button" role="tab" aria-selected="${websiteTab==='sites'&&websiteCategory==='static'}">
+    ${icon('globe')} Static websites <span class="badge">${staticCount}</span>
+   </button>
+   <button class="tab ${websiteTab==='sites'&&websiteCategory==='node'?'active':''}" data-website-subtab="node" data-website-parent="sites" type="button" role="tab" aria-selected="${websiteTab==='sites'&&websiteCategory==='node'}">
+    ${icon('file')} Node.js <span class="badge">${nodeCount}</span>
+   </button>
+   <button class="tab ${websiteTab==='sites'&&websiteCategory==='php'?'active':''}" data-website-subtab="php" data-website-parent="sites" type="button" role="tab" aria-selected="${websiteTab==='sites'&&websiteCategory==='php'}">
+    ${icon('file')} PHP <span class="badge">${phpCount}</span>
+   </button>
+   <button class="tab ${websiteTab==='sites'&&websiteCategory==='python'?'active':''}" data-website-subtab="python" data-website-parent="sites" type="button" role="tab" aria-selected="${websiteTab==='sites'&&websiteCategory==='python'}">
+    ${icon('file')} Python <span class="badge">${pythonCount}</span>
+   </button>
+   <button class="tab ${websiteTab==='runtimes'?'active':''}" data-website-subtab="all" data-website-parent="runtimes" type="button" role="tab" aria-selected="${websiteTab==='runtimes'}">
+    ${icon('cpu')} Runtimes <span class="badge">${runtimesCount}/3</span>
+   </button>
+   <button class="tab ${websiteTab==='engine'?'active':''}" data-website-subtab="all" data-website-parent="engine" type="button" role="tab" aria-selected="${websiteTab==='engine'}">
+    ${icon('server')} Web engine
+   </button>
+  </div>`;
+}
+
+function bindWebsiteSubnav(){
+  $$('[data-website-subtab]').forEach(b=>{
+    b.onclick=action(async()=>{
+      if(!canLeaveWebsite())return;
+      websiteCategory=b.dataset.websiteSubtab;
+      websiteTab=b.dataset.websiteParent;
+      if(typeof syncRouteState==='function')syncRouteState();
+      $$('[data-website-nav]').forEach(sb=>{
+        const active=(sb.dataset.websiteTabNav?websiteTab===sb.dataset.websiteTabNav&&websiteCategory===sb.dataset.websiteNav:websiteCategory===sb.dataset.websiteNav);
+        sb.classList.toggle('active',active);
+        if(active)sb.setAttribute('aria-current','page');else sb.removeAttribute('aria-current');
+      });
+      const websiteTitles={all:['Websites','Virtual hosts, reverse proxies and isolated application runtimes','Websites / All websites'],proxy:['Reverse proxy sites','Upstream forwarding and TLS termination','Websites / Reverse proxy'],static:['Static websites','Atomic directory deployments with Nginx and Coraza validation','Websites / Static websites'],node:['Node.js applications','Isolated Node.js container runtimes','Websites / Node.js'],php:['PHP applications','Isolated PHP-FPM container runtimes','Websites / PHP'],python:['Python applications','Isolated Python container runtimes','Websites / Python'],runtimes:['Application runtimes','Official container images for Node.js, Python and PHP','Websites / Runtimes'],engine:['Web engine','Native Nginx / OpenResty routing engine and recovery','Websites / Web engine']};
+      const titleInfo=websiteTab!=='sites'?websiteTitles[websiteTab]:(websiteTitles[websiteCategory]||websiteTitles.all);
+      if(titleInfo)setHeading(...titleInfo);
+      await websitesPage(generation);
+    });
+  });
+}
+
+async function websitesPage(id){if(me.role!=='admin'){content.innerHTML=empty('Administrator access required','Website management requires an administrator account.','lock');return;}websiteCurrent=null;const [d,engineStatus]=await Promise.all([api('/api/websites'),api('/api/web-engine')]);if(id!==generation)return;d.webEngine=engineStatus;websitesInventory=d;content.innerHTML=`${websiteNavTabs(d)}<div id="websites-content"></div>`;bindWebsiteSubnav();if(websiteTab==='runtimes')renderWebsiteRuntimes(d);else if(websiteTab==='engine')renderWebEngine(d);else renderWebsiteList(d);}
 function renderWebsiteList(d){const target=$('#websites-content');const managed=d.sites;target.innerHTML=`${!d.canManage?notice('Website changes require the administrator service. Complete setup under System.','warning'):''}${!d.engine?`<div class="access-notice"><div><strong>Web engine not installed</strong><p>Install native Nginx automatically, or review the package plan and recovery settings first. Existing applications are retained.</p></div>${button('website-engine-setup','Set up web engine','plus','primary')}</div>`:''}<div class="system-status-strip"><div><span>Web engine</span><strong>${d.engine?'OpenResty / Nginx':'Not installed'}</strong></div><div><span>Total sites</span><strong>${managed.filter(s=>!s.archived).length+d.external.length}</strong></div><div><span>Enabled routes</span><strong>${managed.filter(s=>!s.archived&&s.state==='published').length+d.external.filter(s=>s.enabled!==false).length}</strong></div><div><span>Application runtimes</span><strong>${['node','python','php'].filter(t=>d.runtimes[t]?.installed).length} installed · optional</strong></div></div><div class="card management-card"><div class="toolbar"><div class="section-table-heading"><h2>Configured virtual hosts &amp; routes</h2></div><div class="table-toolbar-actions"><input id="website-search" class="table-filter" type="search" aria-label="Filter websites" placeholder="Filter domains…"><select id="website-filter" class="filters-select" aria-label="Website filter"><option value="all">All websites</option><option value="panel">Panel managed</option><option value="existing">Existing</option><option value="archived">Archived</option></select>${button('website-create','Create website','plus','primary')}</div></div><div class="table-wrap"><table class="management-table"><thead><tr><th>WEBSITE / DOMAINS</th><th>TYPE</th><th>STATUS</th><th>ORIGIN TRANSPORT</th><th class="actions-column">ACTIONS</th></tr></thead><tbody id="website-rows"></tbody></table></div><div class="table-footer"><span id="website-count"></span><span>${d.engine?'Reusing '+esc(d.engine.name):'No compatible web engine detected'}</span></div></div>`;$('#website-create').disabled=!d.engine||!d.canManage;bind('website-create',createWebsiteDialog);bind('website-engine-setup',async()=>{websiteTab='engine';await websitesPage(generation);});$('#website-search').oninput=draw;$('#website-filter').onchange=draw;
  function draw(){const filter=$('#website-filter').value,q=$('#website-search').value.toLowerCase();let rows=[...managed,...d.external];rows=rows.filter(s=>websiteCategory==='all'||(s.managed?s.type:({'Static':'static','PHP':'php','Reverse proxy':'proxy'}[s.type]))===websiteCategory);rows=rows.filter(s=>(filter==='archived'?s.archived:!s.archived)&&(filter!=='panel'||s.managed)&&(filter!=='existing'||!s.managed)&&s.domains.join(' ').toLowerCase().includes(q));$('#website-rows').innerHTML=rows.map((s,i)=>`<tr><td><div class="table-name"><span class="table-icon">${icon('globe')}</span><span><strong>${esc(s.domains[0])}</strong><small>${esc(s.domains.slice(1).join(', ')|| (s.managed?'Panel managed':'Managed by existing configuration'))}</small></span></div></td><td>${esc(s.managed?websiteType(s.type):s.type)}</td><td>${s.managed?websiteState(s):pill(s.enabled===false?'Disabled':'Enabled',s.enabled===false?'':'green')}${s.pending&&s.state==='published'?'<small>Unpublished changes</small>':''}</td><td>${pill(s.tls?'HTTPS':d.engine?.listenAddresses?'Local HTTP':'HTTP',s.tls?'green':'')}</td><td class="actions-column"><button class="button secondary small website-manage" data-index="${i}">Manage</button></td></tr>`).join('')||`<tr><td colspan="5">${empty('No websites here',d.engine?'Create a website, upload your code, then publish it.':'Install or configure OpenResty / Nginx to host websites.','globe')}</td></tr>`;$('#website-count').textContent=rows.length+' websites';$$('.website-manage').forEach(b=>b.onclick=action(()=>{const s=rows[Number(b.dataset.index)];return openWebsite(s.id);;}));}draw();}
 function renderWebsiteRuntimes(d){$('#websites-content').innerHTML=`<div class="card management-card"><div class="toolbar"><div><h2>Website Sandbox Runtimes</h2><p class="field-help">Hosted client websites execute inside unprivileged rootless Docker containers for security isolation, distinct from the host panel Node.js runtime.</p></div>${pill(d.docker?'Docker available':'Docker not installed',d.docker?'green':'amber')}</div><div class="table-wrap"><table class="management-table"><thead><tr><th>RUNTIME</th><th>HOST ENVIRONMENT</th><th>WEBSITE SANDBOX</th><th>CONTAINER IMAGE</th><th class="actions-column">ACTION</th></tr></thead><tbody>${Object.entries(d.runtimes).map(([id,r])=>`<tr><td><strong>${esc(r.name)}</strong>${id==='composer'?'<small>Optional PHP dependency manager</small>':''}</td><td>${esc(d.host[id==='python'?'python3':id]||'Not installed on host')}</td><td>${pill(r.installed?'Sandbox ready':'Not pulled',r.installed?'green':'amber')}</td><td><code>${esc(r.image)}</code>${r.digest?`<small title="${esc(r.digest)}">Digest pinned when publishing</small>`:''}</td><td class="actions-column"><button class="button secondary small website-runtime-install" data-runtime="${id}" ${!d.docker||!d.canManage?'disabled':''}>${r.installed?'Pull update':'Pull sandbox'}</button></td></tr>`).join('')}</tbody></table></div><div class="table-footer"><span>Websites run inside isolated unprivileged containers. Existing sites keep their image until republished.</span></div></div>`;$$('.website-runtime-install').forEach(b=>b.onclick=action(async()=>{const r=d.runtimes[b.dataset.runtime];if(await confirmOperation('Install '+r.name+'?',`Pull ${r.image} from its official Docker repository. Existing websites will keep running unchanged.`,'Install runtime'))watch(await post('/api/websites/runtime',{runtime:b.dataset.runtime,confirm:true}),null,()=>websitesPage(generation));}));}
