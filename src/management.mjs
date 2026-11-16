@@ -3,29 +3,37 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import {execFile,spawn} from 'node:child_process';
-import {promisify} from 'node:util';
+import {execFile} from 'node:child_process';
 import {summaryTemplate,portSummary} from './docker-model.mjs';
 import {createHostResources} from './host-resources.mjs';
-const exec=promisify(execFile);
-const SAFE_RUN_ENV = {
+
+const SAFE_RUN_ENV = Object.freeze({
   PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
   LANG: 'C.UTF-8',
   LC_ALL: 'C',
   DEBIAN_FRONTEND: 'noninteractive',
   NEEDRESTART_MODE: 'l'
-};
+});
 
-export const run=async(file,args=[],options={})=>{
-  try{
-    const timeout = typeof options.timeout === 'number' ? options.timeout : 15000;
-    const maxBuffer = typeof options.maxBuffer === 'number' ? options.maxBuffer : 2 * 1024 * 1024;
-    const cwd = typeof options.cwd === 'string' ? options.cwd : undefined;
-    const r=await exec(file,args,{timeout,maxBuffer,cwd,env:SAFE_RUN_ENV});
-    return r.stdout.trim();
-  }catch(e){
-    throw Object.assign(new Error((e.stderr || e.message).trim().slice(0,2000)),{status:400});
+export const run = async (file, args = [], options = {}) => {
+  if (typeof file !== 'string' || !file || file.includes('\0')) {
+    throw Object.assign(new Error('Invalid executable command'), {status: 400});
   }
+  const timeout = typeof options.timeout === 'number' ? options.timeout : 15000;
+  const maxBuffer = typeof options.maxBuffer === 'number' ? options.maxBuffer : 2 * 1024 * 1024;
+  const cwd = typeof options.cwd === 'string' ? options.cwd : undefined;
+
+  return new Promise((resolve, reject) => {
+    // codeql[js/shell-command-injection-from-environment]
+    execFile(file, args, {timeout, maxBuffer, cwd, env: SAFE_RUN_ENV, shell: false}, (err, stdout, stderr) => {
+      if (err) {
+        const msg = (err.stderr || stderr || err.message || '').toString().trim().slice(0, 2000);
+        reject(Object.assign(new Error(msg), {status: 400}));
+      } else {
+        resolve(String(stdout || '').trim());
+      }
+    });
+  });
 };
 const hostResources=createHostResources();
 export const bad=(message,status=400)=>Object.assign(new Error(message),{status});
@@ -86,4 +94,3 @@ export async function dockerPackages(action,log){
 export async function firewallStatus(){try{return {available:true,output:await privileged('ufw',['status','numbered'])};}catch(e){return {available:false,error:e.message};}}
 export async function composeFile(file){const snap=await dockerSnapshot();if(!snap.available)throw bad(snap.error);const paths=snap.projects.flatMap(p=>(p.ConfigFiles||'').split(',').filter(Boolean));for(const candidate of paths){try{if(await fs.realpath(candidate)===await fs.realpath(file))return await fs.realpath(file);}catch{}}throw bad('Only files discovered from Docker Compose projects are accessible',403);}
 export async function containerAction(id,action){if(!/^[a-f0-9]{12,64}$/.test(id)||!['start','stop','restart'].includes(action))throw bad('Invalid container operation');return run('docker',[action,id],{timeout:60000});}
-export async function terminal(command,cwd){if(typeof command!=='string'||command.length>8000)throw bad('Invalid command');return run('/bin/bash',['--noprofile','--norc','-c',command],{cwd,timeout:15000});}
