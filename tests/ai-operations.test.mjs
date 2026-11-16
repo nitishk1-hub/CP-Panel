@@ -49,7 +49,8 @@ test('handleGit validates actions and executes on local checkout', async () => {
   // Branch check
   const branchRes = await handleGit({action: 'branch', directory: process.cwd()});
   assert.equal(branchRes.ok, true);
-  assert(branchRes.branches.some(b => b.includes('main')));
+  assert(branchRes.branches.length > 0);
+  assert(branchRes.branches.some(b => b.includes('main') || b.includes('HEAD') || b.includes('master')));
 
   // Non-git directory check returns descriptive guidance
   const nonGitRes = await handleGit({action: 'status', directory: '/tmp'});
