@@ -26,7 +26,7 @@ const mcpUrl=publicOrigin+'/mcp';
 
 const clientId = 'e2e-client-' + crypto.randomUUID();
 const rawToken = 'cpoa_' + crypto.randomBytes(32).toString('base64url');
-await injectOAuthTestGrant({
+const { grantId } = await injectOAuthTestGrant({
   dataDir,
   clientId,
   clientName: 'E2E Qualification Runner',
@@ -275,11 +275,12 @@ try{
   }
  }
  await fs.rm(tempDir,{recursive:true,force:true}).catch(()=>{});
- if(oauthBackup!==null){
+ const oauthFile=path.join(dataDir,'mcp-oauth.json');
+ try{
   const current=JSON.parse(await fs.readFile(oauthFile,'utf8'));
   current.clients=current.clients.filter(c=>c.client_id!==clientId);
   current.grants=current.grants.filter(g=>g.id!==grantId);
   current.tokens=current.tokens.filter(t=>t.grantId!==grantId);
   await fs.writeFile(oauthFile,JSON.stringify(current),{mode:0o600});
- }
+ }catch{}
 }
