@@ -8,29 +8,20 @@ import {promisify} from 'node:util';
 import {summaryTemplate,portSummary} from './docker-model.mjs';
 import {createHostResources} from './host-resources.mjs';
 const exec=promisify(execFile);
-const SAFE_EXEC_ENV = {
+const SAFE_RUN_ENV = {
   PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
   LANG: 'C.UTF-8',
   LC_ALL: 'C',
-};
-
-const sanitizeEnv = (customEnv) => {
-  const env = { ...SAFE_EXEC_ENV };
-  if (!customEnv || typeof customEnv !== 'object') return env;
-  const ALLOWED_KEYS = ['DEBIAN_FRONTEND', 'NEEDRESTART_MODE', 'TERM', 'HOME', 'USER'];
-  for (const key of ALLOWED_KEYS) {
-    if (typeof customEnv[key] === 'string' && !customEnv[key].includes('\0') && !customEnv[key].includes('\n')) {
-      env[key] = customEnv[key];
-    }
-  }
-  return env;
+  DEBIAN_FRONTEND: 'noninteractive',
+  NEEDRESTART_MODE: 'l'
 };
 
 export const run=async(file,args=[],options={})=>{
   try{
-    const {env, ...cleanOpts} = options;
-    const finalEnv = env ? sanitizeEnv(env) : SAFE_EXEC_ENV;
-    const r=await exec(file,args,{timeout:15000,maxBuffer:2*1024*1024,...cleanOpts,env:finalEnv});
+    const timeout = typeof options.timeout === 'number' ? options.timeout : 15000;
+    const maxBuffer = typeof options.maxBuffer === 'number' ? options.maxBuffer : 2 * 1024 * 1024;
+    const cwd = typeof options.cwd === 'string' ? options.cwd : undefined;
+    const r=await exec(file,args,{timeout,maxBuffer,cwd,env:SAFE_RUN_ENV});
     return r.stdout.trim();
   }catch(e){
     throw Object.assign(new Error((e.stderr || e.message).trim().slice(0,2000)),{status:400});

@@ -40,3 +40,18 @@ export async function createMCPOAuth({dataDir,identity,origin,audit=async()=>{},
  async function clientOrigins(){return [...new Set((await read()).clients.flatMap(c=>c.redirect_uris).map(u=>new URL(u).origin))];}
  return {provider,resolve,requestInfo,decide,list,revoke,clientOrigins,resource};
 }
+export async function injectOAuthTestGrant({ dataDir, clientId, clientName = 'E2E Qualification Runner', rawToken, scopes = ['read', 'manage', 'command'], resource }) {
+  const users = JSON.parse(await fs.readFile(path.join(dataDir, 'users.json'), 'utf8'));
+  const admin = users.find(u => u.enabled && u.role === 'admin' && !u.mustChangePassword);
+  if (!admin) throw Error('No active admin user found');
+  const stamp = hash((admin.salt || '') + '\0' + (admin.hash || '') + '\0' + JSON.stringify(admin.mfa?.secret || null));
+  const grantId = crypto.randomUUID();
+  const oauthFile = path.join(dataDir, 'mcp-oauth.json');
+  let oauthData = { clients: [], codes: [], grants: [], tokens: [] };
+  try { oauthData = JSON.parse(await fs.readFile(oauthFile, 'utf8')); } catch {}
+  oauthData.clients.push({ client_id: clientId, client_name: clientName, redirect_uris: ['http://127.0.0.1:9999/cb'], token_endpoint_auth_method: 'none' });
+  oauthData.grants.push({ id: grantId, kind: 'oauth', clientId, name: clientName, userId: admin.id, stamp, scopes, resource, createdAt: new Date().toISOString() });
+  oauthData.tokens.push({ hash: hash(rawToken), kind: 'access', grantId, clientId, scopes, expires: Date.now() + 600000 });
+  await fs.writeFile(oauthFile, JSON.stringify(oauthData), { mode: 0o600 });
+  return { grantId, adminId: admin.id };
+}

@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {injectOAuthTestGrant} from '../../src/mcp-oauth.mjs';
 
 const exec=promisify(execFile);
 if(process.getuid()!==0)throw Error('Run end-to-end qualification as root so temporary OAuth grant and test fixtures can be cleaned up safely.');
@@ -23,25 +24,16 @@ if(!publicOrigin){
 if(!publicOrigin)publicOrigin='http://127.0.0.1:8787';
 const mcpUrl=publicOrigin+'/mcp';
 
-const tokenDigest = s => crypto.createHash('sha256').update(s).digest('hex');
-const users = JSON.parse(await fs.readFile(usersFile, 'utf8'));
-const admin = users.find(u => u.enabled && u.role === 'admin' && !u.mustChangePassword);
-if (!admin) throw Error('No active admin user found');
-const credSalt = Reflect.get(admin, 'salt') || '';
-const credHash = Reflect.get(admin, 'hash') || '';
-const stamp = tokenDigest(Buffer.from(`${credSalt}\0${credHash}\0${JSON.stringify(admin.mfa?.secret || null)}`, 'utf8'));
-
 const clientId = 'e2e-client-' + crypto.randomUUID();
-const grantId = crypto.randomUUID();
 const rawToken = 'cpoa_' + crypto.randomBytes(32).toString('base64url');
-const now = Date.now();
-
-const oauthBackup = await fs.readFile(oauthFile, 'utf8').catch(() => null);
-const oauthData = oauthBackup ? JSON.parse(oauthBackup) : { clients: [], codes: [], grants: [], tokens: [] };
-oauthData.clients.push({ client_id: clientId, client_name: 'E2E Qualification Runner', redirect_uris: ['http://127.0.0.1:9999/cb'], token_endpoint_auth_method: 'none' });
-oauthData.grants.push({ id: grantId, kind: 'oauth', clientId, name: 'E2E Qualification Runner', userId: admin.id, stamp, scopes: ['read', 'manage', 'command'], resource: mcpUrl, createdAt: new Date(now).toISOString() });
-oauthData.tokens.push({ hash: tokenDigest(rawToken), kind: 'access', grantId, clientId, scopes: ['read', 'manage', 'command'], expires: now + 600000 });
-await fs.writeFile(oauthFile,JSON.stringify(oauthData),{mode:0o600});
+await injectOAuthTestGrant({
+  dataDir,
+  clientId,
+  clientName: 'E2E Qualification Runner',
+  rawToken,
+  scopes: ['read', 'manage', 'command'],
+  resource: mcpUrl,
+});
 
 const tempDir=await fs.mkdtemp(path.join(os.tmpdir(),'mcp-e2e-'));
 const staticFixtureDir='/var/www/.mcp-e2e-static-'+crypto.randomUUID().slice(0,8);
