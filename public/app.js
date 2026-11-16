@@ -651,339 +651,517 @@ async function cronPage(){
   }
 }
 
-async function notificationsPage(){
-  $('#system-content').innerHTML='<div class="loading-state">Reading notification configurations…</div>';
+let notifActiveTab='channels';
+
+async function notificationsPage(tab=notifActiveTab){
+  notifActiveTab=tab;
+  $('#system-content').innerHTML='<div class="loading-state">Reading notification configurations &amp; incident logs…</div>';
   try{
-    const cfg=await api('/api/notifications/config');
+    const [cfg,auditLogs]=await Promise.all([
+      api('/api/notifications/config').catch(()=>({})),
+      api('/api/audit').catch(()=>[])
+    ]);
+
     const tgConfigured=Boolean(cfg.telegram?.botToken&&cfg.telegram?.chatId);
     const dcConfigured=Boolean(cfg.discord?.webhookUrl);
     const slConfigured=Boolean(cfg.slack?.webhookUrl);
     const whConfigured=Boolean(cfg.webhook?.url);
-    const activeCount=[cfg.telegram?.enabled&&tgConfigured,cfg.discord?.enabled&&dcConfigured,cfg.slack?.enabled&&slConfigured,cfg.webhook?.enabled&&whConfigured].filter(Boolean).length;
+    const activeCount=[
+      cfg.telegram?.enabled&&tgConfigured,
+      cfg.discord?.enabled&&dcConfigured,
+      cfg.slack?.enabled&&slConfigured,
+      cfg.webhook?.enabled&&whConfigured
+    ].filter(Boolean).length;
     const configuredCount=[tgConfigured,dcConfigured,slConfigured,whConfigured].filter(Boolean).length;
     const activeEvents=Object.values(cfg.events||{}).filter(v=>v!==false).length;
 
-    $('#system-content').innerHTML=`
-      <div class="notif-hero-card">
-        <div class="notif-hero-top">
-          <div class="notif-hero-title">
-            <div class="notif-hero-icon">${icon('overview')}</div>
-            <div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <h2 style="margin:0;font-size:18px">Alert Notifications &amp; Incident Dispatcher</h2>
-                ${pill(activeCount>0?'● DISPATCH ENGINE LIVE':'○ NO CHANNELS ACTIVE',activeCount>0?'green':'amber')}
-              </div>
-              <p class="muted" style="margin:4px 0 0;font-size:12px">Instant multi-channel push alerts for container crashes, storage exhaustion, Coraza WAF threat spikes, and backup failures.</p>
-            </div>
-          </div>
-          <div class="row-actions">
-            ${button('notif-test-all','Broadcast test to all','play','secondary')}
-            ${button('notif-help','Setup guide','info')}
-          </div>
-        </div>
-        <div class="notif-kpi-strip">
-          <div class="notif-kpi-item">
-            <span class="notif-kpi-label">Active Channels</span>
-            <span class="notif-kpi-val">${activeCount} of 4 Active</span>
-          </div>
-          <div class="notif-kpi-item">
-            <span class="notif-kpi-label">Configured Integrations</span>
-            <span class="notif-kpi-val">${configuredCount} Configured</span>
-          </div>
-          <div class="notif-kpi-item">
-            <span class="notif-kpi-label">Event Subscriptions</span>
-            <span class="notif-kpi-val">${activeEvents} of 5 Subscribed</span>
-          </div>
-          <div class="notif-kpi-item">
-            <span class="notif-kpi-label">Delivery Transport</span>
-            <span class="notif-kpi-val">${pill('Encrypted HTTPS Egress','green')}</span>
-          </div>
-        </div>
-      </div>
+    const notifLogs=(Array.isArray(auditLogs)?auditLogs:[]).filter(a=>
+      a.action?.startsWith('notifications.')||
+      a.action?.startsWith('waf.')||
+      a.action?.startsWith('backup.')||
+      a.action?.startsWith('docker.')||
+      a.action?.includes('error')||
+      a.action?.includes('alert')
+    ).reverse();
 
-      <form id="notif-config-form">
-        <div class="section-table-heading" style="margin-bottom:12px">
-          <h3>1. Delivery Channels &amp; Webhook Integrations</h3>
-          <p class="muted tiny">Configure endpoints where critical system alerts and operational notices are pushed.</p>
-        </div>
+    let tabBody='';
 
-        <div class="notif-channel-grid">
+    if(notifActiveTab==='channels'){
+      tabBody=`
+        <form id="notif-channels-form">
           <!-- Telegram -->
-          <div class="notif-channel-card notif-card-telegram">
+          <div class="notif-channel-card">
             <div class="notif-channel-header">
               <div class="notif-channel-brand">
-                <div class="notif-brand-icon">✈️</div>
+                <span class="notif-brand-emoji">✈️</span>
                 <div>
-                  <h4 class="notif-channel-title">Telegram Bot</h4>
-                  <small class="muted">Instant push messages &amp; group mentions</small>
+                  <h3 style="margin:0;font-size:14px;font-weight:600">Telegram Bot</h3>
+                  <small class="muted">Instant push messages and group notifications</small>
                 </div>
               </div>
-              ${pill(cfg.telegram?.enabled?(tgConfigured?'Active':'Missing info'):'Disabled',cfg.telegram?.enabled?(tgConfigured?'green':'amber'):'')}
+              <div class="notif-channel-actions">
+                ${pill(tgConfigured?(cfg.telegram?.enabled?'Active':'Disabled'):'Not Configured',tgConfigured?(cfg.telegram?.enabled?'green':'amber'):'')}
+                ${button('test-tg-btn','Test Telegram','play','secondary small')}
+              </div>
             </div>
-            <label class="checkbox-label" style="font-weight:600">
-              <input type="checkbox" name="tg_enabled" ${cfg.telegram?.enabled?'checked':''}> Enable Telegram channel
-            </label>
-            <label>Bot Token
-              <input name="tg_botToken" type="password" placeholder="${cfg.telegram?.botToken?'•••••••••••• (Configured)': 'e.g. 123456789:ABCdefGHIjklMNO'}" autocomplete="off">
-              <small class="field-help">Obtain via <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a></small>
-            </label>
-            <label>Chat ID / Channel ID
-              <input name="tg_chatId" value="${esc(cfg.telegram?.chatId||'')}" placeholder="e.g. 987654321 or -100123456789">
-              <small class="field-help">Your Telegram user ID or group chat ID</small>
-            </label>
-            <div style="margin-top:auto;padding-top:10px">
-              <button type="button" class="button secondary small" id="test-tg-btn" style="width:100%">${icon('play')} Test Telegram dispatch</button>
+            <div class="notif-channel-body">
+              <div class="notif-enable-row">
+                <label class="checkbox-label" style="font-weight:600">
+                  <input type="checkbox" name="tg_enabled" ${cfg.telegram?.enabled?'checked':''}>
+                  <span>Enable Telegram channel</span>
+                </label>
+              </div>
+              <div class="form-grid">
+                <label>Bot Token
+                  <input name="tg_botToken" type="password" placeholder="${cfg.telegram?.botToken?'•••••••••••• (Configured)':'e.g. 123456789:ABCdefGHIjklMNO'}" autocomplete="off">
+                  <span class="field-help">Obtain from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a></span>
+                </label>
+                <label>Chat ID / Channel ID
+                  <input name="tg_chatId" value="${esc(cfg.telegram?.chatId||'')}" placeholder="e.g. 987654321 or -100123456789">
+                  <span class="field-help">Your Telegram user ID or group chat ID</span>
+                </label>
+              </div>
             </div>
           </div>
 
           <!-- Discord -->
-          <div class="notif-channel-card notif-card-discord">
+          <div class="notif-channel-card">
             <div class="notif-channel-header">
               <div class="notif-channel-brand">
-                <div class="notif-brand-icon">🎮</div>
+                <span class="notif-brand-emoji">🎮</span>
                 <div>
-                  <h4 class="notif-channel-title">Discord Webhook</h4>
-                  <small class="muted">Rich embed alerts in your server channel</small>
+                  <h3 style="margin:0;font-size:14px;font-weight:600">Discord Webhook</h3>
+                  <small class="muted">Color-coded rich embed cards delivered to a channel</small>
                 </div>
               </div>
-              ${pill(cfg.discord?.enabled?(dcConfigured?'Active':'Missing URL'):'Disabled',cfg.discord?.enabled?(dcConfigured?'green':'amber'):'')}
+              <div class="notif-channel-actions">
+                ${pill(dcConfigured?(cfg.discord?.enabled?'Active':'Disabled'):'Not Configured',dcConfigured?(cfg.discord?.enabled?'green':'amber'):'')}
+                ${button('test-dc-btn','Test Discord','play','secondary small')}
+              </div>
             </div>
-            <label class="checkbox-label" style="font-weight:600">
-              <input type="checkbox" name="dc_enabled" ${cfg.discord?.enabled?'checked':''}> Enable Discord channel
-            </label>
-            <label>Webhook URL
-              <input name="dc_webhookUrl" type="password" placeholder="${cfg.discord?.webhookUrl?'•••••••••••• (Configured)': 'https://discord.com/api/webhooks/...'}" autocomplete="off">
-              <small class="field-help">Server Settings → Integrations → Webhooks</small>
-            </label>
-            <div style="margin-top:auto;padding-top:10px">
-              <button type="button" class="button secondary small" id="test-dc-btn" style="width:100%">${icon('play')} Test Discord dispatch</button>
+            <div class="notif-channel-body">
+              <div class="notif-enable-row">
+                <label class="checkbox-label" style="font-weight:600">
+                  <input type="checkbox" name="dc_enabled" ${cfg.discord?.enabled?'checked':''}>
+                  <span>Enable Discord channel</span>
+                </label>
+              </div>
+              <div>
+                <label>Discord Webhook URL
+                  <input name="dc_webhookUrl" type="password" placeholder="${cfg.discord?.webhookUrl?'•••••••••••• (Configured)':'https://discord.com/api/webhooks/...'}" autocomplete="off">
+                  <span class="field-help">Channel Settings → Integrations → Webhooks</span>
+                </label>
+              </div>
             </div>
           </div>
 
           <!-- Slack -->
-          <div class="notif-channel-card notif-card-slack">
+          <div class="notif-channel-card">
             <div class="notif-channel-header">
               <div class="notif-channel-brand">
-                <div class="notif-brand-icon">💬</div>
+                <span class="notif-brand-emoji">💬</span>
                 <div>
-                  <h4 class="notif-channel-title">Slack Webhook</h4>
-                  <small class="muted">Real-time alerts in Slack workspace channels</small>
+                  <h3 style="margin:0;font-size:14px;font-weight:600">Slack Incoming Webhook</h3>
+                  <small class="muted">Real-time alerts posted directly into your Slack workspace</small>
                 </div>
               </div>
-              ${pill(cfg.slack?.enabled?(slConfigured?'Active':'Missing URL'):'Disabled',cfg.slack?.enabled?(slConfigured?'green':'amber'):'')}
+              <div class="notif-channel-actions">
+                ${pill(slConfigured?(cfg.slack?.enabled?'Active':'Disabled'):'Not Configured',slConfigured?(cfg.slack?.enabled?'green':'amber'):'')}
+                ${button('test-sl-btn','Test Slack','play','secondary small')}
+              </div>
             </div>
-            <label class="checkbox-label" style="font-weight:600">
-              <input type="checkbox" name="sl_enabled" ${cfg.slack?.enabled?'checked':''}> Enable Slack channel
-            </label>
-            <label>Incoming Webhook URL
-              <input name="sl_webhookUrl" type="password" placeholder="${cfg.slack?.webhookUrl?'•••••••••••• (Configured)': 'https://hooks.slack.com/services/...'}" autocomplete="off">
-              <small class="field-help">Slack App Directory → Incoming WebHooks</small>
-            </label>
-            <div style="margin-top:auto;padding-top:10px">
-              <button type="button" class="button secondary small" id="test-sl-btn" style="width:100%">${icon('play')} Test Slack dispatch</button>
+            <div class="notif-channel-body">
+              <div class="notif-enable-row">
+                <label class="checkbox-label" style="font-weight:600">
+                  <input type="checkbox" name="sl_enabled" ${cfg.slack?.enabled?'checked':''}>
+                  <span>Enable Slack channel</span>
+                </label>
+              </div>
+              <div>
+                <label>Incoming Webhook URL
+                  <input name="sl_webhookUrl" type="password" placeholder="${cfg.slack?.webhookUrl?'•••••••••••• (Configured)':'https://hooks.slack.com/services/...'}" autocomplete="off">
+                  <span class="field-help">Slack App Directory → Incoming WebHooks</span>
+                </label>
+              </div>
             </div>
           </div>
 
           <!-- Custom Webhook -->
-          <div class="notif-channel-card notif-card-webhook">
+          <div class="notif-channel-card">
             <div class="notif-channel-header">
               <div class="notif-channel-brand">
-                <div class="notif-brand-icon">⚡</div>
+                <span class="notif-brand-emoji">⚡</span>
                 <div>
-                  <h4 class="notif-channel-title">Custom HTTP Webhook</h4>
-                  <small class="muted">n8n, PagerDuty, Zapier or custom SIEM</small>
+                  <h3 style="margin:0;font-size:14px;font-weight:600">Custom HTTP Webhook</h3>
+                  <small class="muted">Dispatches standard JSON payloads to n8n, PagerDuty, or custom SIEM</small>
                 </div>
               </div>
-              ${pill(cfg.webhook?.enabled?(whConfigured?'Active':'Missing URL'):'Disabled',cfg.webhook?.enabled?(whConfigured?'green':'amber'):'')}
+              <div class="notif-channel-actions">
+                ${pill(whConfigured?(cfg.webhook?.enabled?'Active':'Disabled'):'Not Configured',whConfigured?(cfg.webhook?.enabled?'green':'amber'):'')}
+                ${button('test-wh-btn','Test Webhook','play','secondary small')}
+              </div>
             </div>
-            <label class="checkbox-label" style="font-weight:600">
-              <input type="checkbox" name="wh_enabled" ${cfg.webhook?.enabled?'checked':''}> Enable Custom Webhook
-            </label>
-            <label>Target Webhook URL
-              <input name="wh_url" placeholder="${cfg.webhook?.url?'(Configured)': 'https://api.example.com/alerts'}" value="${esc(cfg.webhook?.url||'')}">
-              <small class="field-help">Receives HTTP POST with JSON event payload</small>
-            </label>
-            <label>Secret Token Header (X-Panel-Secret)
-              <input name="wh_secret" type="password" placeholder="${cfg.webhook?.secretHeader?'••••••••••••': 'Optional verification secret'}" autocomplete="off">
-              <small class="field-help">Sent in X-Panel-Secret header for authentication</small>
-            </label>
-            <div style="margin-top:auto;padding-top:10px">
-              <button type="button" class="button secondary small" id="test-wh-btn" style="width:100%">${icon('play')} Test Webhook dispatch</button>
+            <div class="notif-channel-body">
+              <div class="notif-enable-row">
+                <label class="checkbox-label" style="font-weight:600">
+                  <input type="checkbox" name="wh_enabled" ${cfg.webhook?.enabled?'checked':''}>
+                  <span>Enable Custom Webhook</span>
+                </label>
+              </div>
+              <div class="form-grid">
+                <label>Target Webhook URL
+                  <input name="wh_url" placeholder="${cfg.webhook?.url?'(Configured)':'https://api.example.com/alerts'}" value="${esc(cfg.webhook?.url||'')}">
+                  <span class="field-help">HTTP POST target that receives JSON alert payload with severity and event metadata</span>
+                </label>
+                <label>Secret Token Header (X-Panel-Secret)
+                  <input name="wh_secret" type="password" placeholder="${cfg.webhook?.secretHeader?'•••••••••••• (Configured)':'Optional verification secret'}" autocomplete="off">
+                  <span class="field-help">Sent in X-Panel-Secret header for authentication</span>
+                </label>
+              </div>
             </div>
           </div>
+
+          <div style="display:flex;align-items:center;gap:14px;padding:8px 0 20px">
+            <button type="submit" class="button primary">${icon('check')} Save Channel Settings</button>
+            <span class="muted tiny">Tokens and secrets are stored in encrypted mode (0600 root-only).</span>
+          </div>
+        </form>
+      `;
+    }else if(notifActiveTab==='rules'){
+      tabBody=`
+        <form id="notif-rules-form">
+          <div class="card management-card" style="margin-bottom:20px">
+            <div class="toolbar">
+              <div class="section-table-heading">
+                <h2>Autonomous Incident Trigger Rules</h2>
+                <span class="count-inline">Select which system occurrences automatically dispatch alert notifications</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="management-table">
+                <thead>
+                  <tr>
+                    <th>INCIDENT / EVENT</th>
+                    <th>SEVERITY</th>
+                    <th>TRIGGER CONDITION</th>
+                    <th>DELIVERY</th>
+                    <th class="actions-column">STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:20px">🚨</span>
+                        <div>
+                          <strong>Container Failure</strong>
+                          <small class="muted" style="display:block">event: <code>container_down</code></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>${pill('CRITICAL','red')}</td>
+                    <td>Fires immediately when any Docker container crashes, exits unexpectedly, or fails health checks.</td>
+                    <td><span class="badge">All active channels</span></td>
+                    <td class="actions-column">
+                      <label class="checkbox-label" style="justify-content:flex-end">
+                        <input type="checkbox" name="ev_container_down" ${cfg.events?.container_down!==false?'checked':''}>
+                        <span>Subscribed</span>
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:20px">💾</span>
+                        <div>
+                          <strong>Storage Exhaustion</strong>
+                          <small class="muted" style="display:block">event: <code>storage_alert</code></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>${pill('CRITICAL','red')}</td>
+                    <td>Fires when root filesystem (/) disk utilization exceeds 85% or available inodes fall below 10%.</td>
+                    <td><span class="badge">All active channels</span></td>
+                    <td class="actions-column">
+                      <label class="checkbox-label" style="justify-content:flex-end">
+                        <input type="checkbox" name="ev_storage_alert" ${cfg.events?.storage_alert!==false?'checked':''}>
+                        <span>Subscribed</span>
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:20px">🛡️</span>
+                        <div>
+                          <strong>WAF Threat Surge</strong>
+                          <small class="muted" style="display:block">event: <code>waf_surge</code></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>${pill('WARNING','amber')}</td>
+                    <td>Fires when Coraza WAF or CrowdSec blocks an aggressive attack burst (&gt; 20 blocks within 60s).</td>
+                    <td><span class="badge">All active channels</span></td>
+                    <td class="actions-column">
+                      <label class="checkbox-label" style="justify-content:flex-end">
+                        <input type="checkbox" name="ev_waf_surge" ${cfg.events?.waf_surge!==false?'checked':''}>
+                        <span>Subscribed</span>
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:20px">📦</span>
+                        <div>
+                          <strong>Cloud Backup Failure</strong>
+                          <small class="muted" style="display:block">event: <code>backup_failed</code></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>${pill('WARNING','amber')}</td>
+                    <td>Fires if scheduled automated S3 / Cloudflare R2 snapshot upload fails or times out.</td>
+                    <td><span class="badge">All active channels</span></td>
+                    <td class="actions-column">
+                      <label class="checkbox-label" style="justify-content:flex-end">
+                        <input type="checkbox" name="ev_backup_failed" ${cfg.events?.backup_failed!==false?'checked':''}>
+                        <span>Subscribed</span>
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:20px">🔒</span>
+                        <div>
+                          <strong>SSL/TLS Certificate Expiration</strong>
+                          <small class="muted" style="display:block">event: <code>ssl_expiry</code></small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>${pill('INFO','blue')}</td>
+                    <td>Fires when any website origin SSL/TLS certificate has fewer than 14 days remaining.</td>
+                    <td><span class="badge">All active channels</span></td>
+                    <td class="actions-column">
+                      <label class="checkbox-label" style="justify-content:flex-end">
+                        <input type="checkbox" name="ev_ssl_expiry" ${cfg.events?.ssl_expiry!==false?'checked':''}>
+                        <span>Subscribed</span>
+                      </label>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:14px;padding:8px 0 20px">
+            <button type="submit" class="button primary">${icon('check')} Save Rule Subscriptions</button>
+            <span class="muted tiny">Rules apply immediately to incoming system occurrences.</span>
+          </div>
+        </form>
+      `;
+    }else if(notifActiveTab==='logs'){
+      tabBody=`
+        <div class="card management-card">
+          <div class="toolbar">
+            <div class="section-table-heading">
+              <h2>Recent Alert &amp; Incident Dispatch Log</h2>
+              <span class="count-inline">${notifLogs.length} logged event${notifLogs.length===1?'':'s'}</span>
+            </div>
+            <div class="table-toolbar-actions">
+              ${button('notif-log-test-btn','Send Test Alert','play','secondary small')}
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="management-table">
+              <thead>
+                <tr>
+                  <th>TIMESTAMP</th>
+                  <th>ACTION / EVENT</th>
+                  <th>ACTOR</th>
+                  <th>OUTCOME</th>
+                  <th>DETAILS</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${notifLogs.length?notifLogs.slice(0,50).map(a=>`
+                  <tr>
+                    <td><small class="muted">${esc(new Date(a.time).toLocaleString())}</small></td>
+                    <td><strong><code>${esc(a.action)}</code></strong></td>
+                    <td><span class="badge">${esc(a.actor||'system')}</span></td>
+                    <td>${pill(a.outcome||'recorded',a.outcome==='failed'?'red':'green')}</td>
+                    <td><small class="muted">${esc(a.target||(a.requestId?`req: ${a.requestId.slice(0,8)}`:'—'))}</small></td>
+                  </tr>
+                `).join(''):`
+                  <tr>
+                    <td colspan="5">
+                      ${empty('No incident dispatches logged yet','When trigger events occur or test alerts are dispatched, delivery logs appear here.','clock')}
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
         </div>
+      `;
+    }
 
-        <div class="section-table-heading" style="margin-bottom:12px">
-          <h3>2. Trigger Event Subscriptions</h3>
-          <p class="muted tiny">Select which autonomous system occurrences trigger an immediate notification dispatch.</p>
-        </div>
-
-        <div class="notif-event-grid">
-          <label class="notif-event-card">
-            <span class="notif-event-icon">🚨</span>
-            <div class="notif-event-info">
-              <div class="notif-event-top">
-                <span class="notif-event-name">Container Failure</span>
-                ${pill('CRITICAL','red')}
-              </div>
-              <p class="notif-event-desc">Fires immediately when any Docker container crashes, unhealthily exits, or loops.</p>
-            </div>
-            <input type="checkbox" name="ev_container_down" ${cfg.events?.container_down!==false?'checked':''} style="margin-left:auto">
-          </label>
-
-          <label class="notif-event-card">
-            <span class="notif-event-icon">💾</span>
-            <div class="notif-event-info">
-              <div class="notif-event-top">
-                <span class="notif-event-name">Storage Critical</span>
-                ${pill('CRITICAL','red')}
-              </div>
-              <p class="notif-event-desc">Fires when filesystem disk usage exceeds 85% or available inodes fall below 10%.</p>
-            </div>
-            <input type="checkbox" name="ev_storage_alert" ${cfg.events?.storage_alert!==false?'checked':''} style="margin-left:auto">
-          </label>
-
-          <label class="notif-event-card">
-            <span class="notif-event-icon">🛡️</span>
-            <div class="notif-event-info">
-              <div class="notif-event-top">
-                <span class="notif-event-name">WAF Threat Surge</span>
-                ${pill('WARNING','amber')}
-              </div>
-              <p class="notif-event-desc">Fires when Coraza or CrowdSec detects high-frequency attack bursts (&gt;20 blocks/min).</p>
-            </div>
-            <input type="checkbox" name="ev_waf_surge" ${cfg.events?.waf_surge!==false?'checked':''} style="margin-left:auto">
-          </label>
-
-          <label class="notif-event-card">
-            <span class="notif-event-icon">📦</span>
-            <div class="notif-event-info">
-              <div class="notif-event-top">
-                <span class="notif-event-name">Cloud Backup Failure</span>
-                ${pill('WARNING','amber')}
-              </div>
-              <p class="notif-event-desc">Fires if daily automated S3 / Cloudflare R2 cloud snapshot job fails or times out.</p>
-            </div>
-            <input type="checkbox" name="ev_backup_failed" ${cfg.events?.backup_failed!==false?'checked':''} style="margin-left:auto">
-          </label>
-
-          <label class="notif-event-card">
-            <span class="notif-event-icon">🔒</span>
-            <div class="notif-event-info">
-              <div class="notif-event-top">
-                <span class="notif-event-name">TLS Certificate Expiry</span>
-                ${pill('INFO','')}
-              </div>
-              <p class="notif-event-desc">Fires when any website origin SSL/TLS certificate has fewer than 14 days remaining.</p>
-            </div>
-            <input type="checkbox" name="ev_ssl_expiry" ${cfg.events?.ssl_expiry!==false?'checked':''} style="margin-left:auto">
-          </label>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px">
-          <button type="submit" class="button primary">${icon('check')} Save All Notification Settings</button>
-          <span class="muted tiny">Tokens and webhook secrets are stored privately in encrypted mode (0600 root-only).</span>
-        </div>
-      </form>
-
-      <div class="card management-card">
+    $('#system-content').innerHTML=`
+      <div class="card management-card" style="margin-bottom:16px">
         <div class="toolbar">
           <div class="section-table-heading">
-            <h3>3. Live Alert Template Simulation</h3>
-            <p class="muted tiny">Real-time preview of formatted alerts as delivered to user devices.</p>
+            <h2>Alert Notifications &amp; Incident Dispatcher</h2>
+            <span class="count-inline">${activeCount} active channel${activeCount===1?'':'s'} · ${activeEvents} of 5 rules subscribed</span>
+          </div>
+          <div class="table-toolbar-actions">
+            ${button('notif-test-all','Broadcast test alert','play','secondary')}
+            ${button('notif-help','Setup guide','info','ghost')}
           </div>
         </div>
-        <div class="card-pad" style="padding-top:4px">
-          <div class="notif-preview-container">
-            <div>
-              <span class="preview-label">Telegram Markdown Template</span>
-              <div class="notif-tg-preview" style="margin-top:6px">
-                <strong>🛡️ [CP-Panel · CyberPross]</strong><br>
-                <em>*Container Outage Detected*</em><br>
-                Severity: <code>CRITICAL</code><br>
-                Event: <code>container_down</code><br><br>
-                Container <strong>cyberpross-n8n-n8n-1</strong> exited unexpectedly with code 137.<br>
-                <small class="muted">Time: ${new Date().toLocaleTimeString()} IST · cyber.cyberpross.cc</small>
-              </div>
-            </div>
-            <div>
-              <span class="preview-label">Discord Rich Embed Template</span>
-              <div class="notif-dc-preview" style="margin-top:6px">
-                <div style="font-weight:700;color:#fff;margin-bottom:4px">🛡️ CP-Panel Alert (by CyberPross)</div>
-                <div style="font-size:13px;font-weight:600;margin-bottom:6px">Storage Critical (&gt;85%)</div>
-                <div style="font-size:11px;color:#94a3b8;margin-bottom:8px">Root filesystem <code>/</code> has reached 88.4% capacity (12.2 GB remaining).</div>
-                <div style="display:flex;gap:16px;font-size:11px">
-                  <div><span style="color:#94a3b8">Severity:</span> <strong>CRITICAL</strong></div>
-                  <div><span style="color:#94a3b8">Mount:</span> <code>/</code></div>
-                </div>
-              </div>
-            </div>
+
+        <div class="system-status-strip">
+          <div>
+            <span>Active Channels</span>
+            <strong>${activeCount>0?pill(`${activeCount} of 4 Active`,'green'):pill('0 Active','amber')}</strong>
+          </div>
+          <div>
+            <span>Configured Integrations</span>
+            <strong>${configuredCount} of 4 Ready</strong>
+          </div>
+          <div>
+            <span>Subscribed Triggers</span>
+            <strong>${activeEvents} of 5 Enabled</strong>
+          </div>
+          <div>
+            <span>Transport Security</span>
+            <strong>${pill('HTTPS Egress','blue')}</strong>
           </div>
         </div>
       </div>
+
+      <div class="tabs" style="margin-bottom:16px">
+        <button class="tab ${notifActiveTab==='channels'?'active':''}" data-notif-tab="channels">
+          ${icon('network')} Delivery Channels (${configuredCount}/4)
+        </button>
+        <button class="tab ${notifActiveTab==='rules'?'active':''}" data-notif-tab="rules">
+          ${icon('shield')} Alert Rules &amp; Triggers (${activeEvents}/5)
+        </button>
+        <button class="tab ${notifActiveTab==='logs'?'active':''}" data-notif-tab="logs">
+          ${icon('clock')} Incident &amp; Dispatch Log (${notifLogs.length})
+        </button>
+      </div>
+
+      ${tabBody}
     `;
 
-    form('notif-config-form',async e=>{
-      const f=new FormData(e);
-      const payload={
-        telegram:{enabled:f.get('tg_enabled')!==null,botToken:f.get('tg_botToken')?.trim()||undefined,chatId:f.get('tg_chatId')?.trim()||undefined},
-        discord:{enabled:f.get('dc_enabled')!==null,webhookUrl:f.get('dc_webhookUrl')?.trim()||undefined},
-        slack:{enabled:f.get('sl_enabled')!==null,webhookUrl:f.get('sl_webhookUrl')?.trim()||undefined},
-        webhook:{enabled:f.get('wh_enabled')!==null,url:f.get('wh_url')?.trim()||undefined,secretHeader:f.get('wh_secret')?.trim()||undefined},
-        events:{
-          container_down:f.get('ev_container_down')!==null,
-          storage_alert:f.get('ev_storage_alert')!==null,
-          waf_surge:f.get('ev_waf_surge')!==null,
-          backup_failed:f.get('ev_backup_failed')!==null,
-          ssl_expiry:f.get('ev_ssl_expiry')!==null
-        }
-      };
-      await post('/api/notifications/config',payload);
-      notify('All notification channels and trigger event subscriptions saved.');
-      await notificationsPage();
+    $$('[data-notif-tab]').forEach(b=>{
+      b.onclick=action(()=>notificationsPage(b.dataset.notifTab));
     });
 
-    bind('test-tg-btn',async()=>{
-      const r=await post('/api/notifications/test',{channel:'telegram'});
-      notify(r.dispatches?.[0]?.ok?'Telegram test message sent!':'Telegram dispatch failed. Check token/chat ID.');
-    });
-    bind('test-dc-btn',async()=>{
-      const r=await post('/api/notifications/test',{channel:'discord'});
-      notify(r.dispatches?.[0]?.ok?'Discord test message sent!':'Discord dispatch failed. Check webhook URL.');
-    });
-    bind('test-sl-btn',async()=>{
-      const r=await post('/api/notifications/test',{channel:'slack'});
-      notify(r.dispatches?.[0]?.ok?'Slack test message sent!':'Slack dispatch failed. Check webhook URL.');
-    });
-    bind('test-wh-btn',async()=>{
-      const r=await post('/api/notifications/test',{channel:'webhook'});
-      notify(r.dispatches?.[0]?.ok?'Webhook test payload sent!':'Webhook dispatch failed. Check target URL.');
-    });
+    if(notifActiveTab==='channels'){
+      form('notif-channels-form',async e=>{
+        const f=new FormData(e);
+        const payload={
+          telegram:{
+            enabled:f.get('tg_enabled')!==null,
+            botToken:f.get('tg_botToken')?.trim()||undefined,
+            chatId:f.get('tg_chatId')?.trim()||undefined
+          },
+          discord:{
+            enabled:f.get('dc_enabled')!==null,
+            webhookUrl:f.get('dc_webhookUrl')?.trim()||undefined
+          },
+          slack:{
+            enabled:f.get('sl_enabled')!==null,
+            webhookUrl:f.get('sl_webhookUrl')?.trim()||undefined
+          },
+          webhook:{
+            enabled:f.get('wh_enabled')!==null,
+            url:f.get('wh_url')?.trim()||undefined,
+            secretHeader:f.get('wh_secret')?.trim()||undefined
+          }
+        };
+        await post('/api/notifications/config',payload);
+        notify('Delivery channel settings saved successfully.');
+        await notificationsPage('channels');
+      });
+
+      bind('test-tg-btn',async()=>{
+        const r=await post('/api/notifications/test',{channel:'telegram'});
+        notify(r.dispatches?.[0]?.ok?'✓ Telegram test message sent! Check your chat.':'✗ Telegram dispatch failed. Check token/chat ID.');
+      });
+      bind('test-dc-btn',async()=>{
+        const r=await post('/api/notifications/test',{channel:'discord'});
+        notify(r.dispatches?.[0]?.ok?'✓ Discord test embed sent! Check your channel.':'✗ Discord dispatch failed. Check webhook URL.');
+      });
+      bind('test-sl-btn',async()=>{
+        const r=await post('/api/notifications/test',{channel:'slack'});
+        notify(r.dispatches?.[0]?.ok?'✓ Slack test message sent! Check your channel.':'✗ Slack dispatch failed. Check webhook URL.');
+      });
+      bind('test-wh-btn',async()=>{
+        const r=await post('/api/notifications/test',{channel:'webhook'});
+        notify(r.dispatches?.[0]?.ok?'✓ Webhook test payload sent successfully!':'✗ Webhook dispatch failed. Check target URL.');
+      });
+    }
+
+    if(notifActiveTab==='rules'){
+      form('notif-rules-form',async e=>{
+        const f=new FormData(e);
+        const payload={
+          events:{
+            container_down:f.get('ev_container_down')!==null,
+            storage_alert:f.get('ev_storage_alert')!==null,
+            waf_surge:f.get('ev_waf_surge')!==null,
+            backup_failed:f.get('ev_backup_failed')!==null,
+            ssl_expiry:f.get('ev_ssl_expiry')!==null
+          }
+        };
+        await post('/api/notifications/config',payload);
+        notify('Alert rule subscriptions saved successfully.');
+        await notificationsPage('rules');
+      });
+    }
+
+    if(notifActiveTab==='logs'){
+      bind('notif-log-test-btn',async()=>{
+        for(const ch of ['telegram','discord','slack','webhook']){
+          try{await post('/api/notifications/test',{channel:ch});}catch{}
+        }
+        notify('Test alert dispatched to all channels.');
+        await notificationsPage('logs');
+      });
+    }
+
     bind('notif-test-all',async()=>{
       for(const ch of ['telegram','discord','slack','webhook']){
         try{await post('/api/notifications/test',{channel:ch});}catch{}
       }
       notify('Broadcast test dispatched to all enabled channels.');
+      if(notifActiveTab==='logs')await notificationsPage('logs');
     });
+
     bind('notif-help',()=>openModal('Alert Notifications Setup Guide',`
-      <div class="modal-body">
-        <h4>1. Telegram Bot Integration</h4>
-        <ol>
+      <div class="modal-body" style="line-height:1.6">
+        <h3 style="margin-top:0">1. Telegram Bot Integration</h3>
+        <ol style="padding-left:18px;margin-bottom:16px">
           <li>Open Telegram and message <strong>@BotFather</strong> to create a bot with <code>/newbot</code>. Copy the HTTP API token into <em>Bot Token</em>.</li>
           <li>Start a conversation with your bot, then message <strong>@userinfobot</strong> to obtain your numeric <em>Chat ID</em>.</li>
         </ol>
-        <h4>2. Discord Webhook</h4>
-        <ol>
+        <h3>2. Discord Webhook</h3>
+        <ol style="padding-left:18px;margin-bottom:16px">
           <li>In your Discord server, open <strong>Channel Settings → Integrations → Webhooks</strong>.</li>
           <li>Click <em>New Webhook</em> and copy the Webhook URL into CP-Panel.</li>
         </ol>
-        <h4>3. Slack Incoming Webhook</h4>
-        <ol>
+        <h3>3. Slack Incoming Webhook</h3>
+        <ol style="padding-left:18px;margin-bottom:16px">
           <li>Navigate to the Slack App Directory and enable <strong>Incoming WebHooks</strong>.</li>
           <li>Pick your destination channel and paste the provided Webhook URL.</li>
         </ol>
-        <h4>4. Custom HTTP Webhook</h4>
-        <p>CP-Panel delivers standard JSON payloads over HTTP POST to any external endpoint (e.g. n8n workflows, PagerDuty, or Grafana OnCall).</p>
+        <h3>4. Custom HTTP Webhook (SIEM / n8n / PagerDuty)</h3>
+        <p class="field-help">Payloads are dispatched via HTTP POST in JSON format with <code>event</code>, <code>title</code>, <code>message</code>, <code>severity</code>, and <code>timestamp</code> fields. If a Secret Header is configured, it is transmitted in the <code>X-Panel-Secret</code> header.</p>
+      </div>
+      <div class="form-actions">
+        <button class="button secondary" type="button" onclick="modal.close()">Close</button>
       </div>
     `));
   }catch(e){
