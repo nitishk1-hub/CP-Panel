@@ -20,7 +20,7 @@ test("Tasks execute in order in the backend, retain bounded history and redact c
       second = runner.start("Second", async () => order.push("second"));
     assert.equal(second.state, "queued");
     assert.equal(runner.list().active, 2);
-    await new Promise((r) => setTimeout(r, 20));
+    for (let i = 0; i < 50 && order.length === 0; i++) await new Promise((r) => setTimeout(r, 20));
     assert.deepEqual(order, ["first-start"]);
     release();
     await runner.idle();
