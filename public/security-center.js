@@ -398,8 +398,19 @@ async function securityCenterPage(){
  $$('[data-sec-tab]').forEach(tab=>{
   tab.onclick=()=>{
    securitySection=tab.dataset.secTab;
+   if(typeof syncRouteState==='function')syncRouteState();
+   $$('[data-security-nav]').forEach(b=>{
+    const sel=b.dataset.securityNav===securitySection;
+    b.classList.toggle('active',sel);
+    if(sel)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
+   });
    securityCenterPage();
   };
+ });
+ $$('[data-security-nav]').forEach(b=>{
+  const sel=b.dataset.securityNav===securitySection;
+  b.classList.toggle('active',sel);
+  if(sel)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');
  });
 
  function inspectOrigin(loc){
