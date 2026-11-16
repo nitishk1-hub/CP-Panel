@@ -42,10 +42,18 @@ async function tunnelPage(){
     `;
 
     if (cfViewTab === 'dns') {
+      const currentHost = window.location.hostname || '';
+      const hostParts = currentHost.split('.').filter(Boolean);
+      const detectedRoot = (hostParts.length >= 2 && !['localhost', '127.0.0.1'].includes(currentHost) && !/^\d+$/.test(hostParts.at(-1)))
+        ? hostParts.slice(-2).join('.')
+        : '';
+      const webDomainPlaceholder = detectedRoot ? `e.g. ${detectedRoot} or app.${detectedRoot}` : 'e.g. yourdomain.com or app.yourdomain.com';
+      const rootDomainPlaceholder = detectedRoot ? `e.g. ${detectedRoot}` : 'e.g. yourdomain.com';
+
       target.innerHTML = `
         <div class="system-status-strip">
           <div><span>Cloudflare API</span><strong>${dnsStatus.configured ? pill('Configured &amp; Active', 'green') : pill('Not Configured', 'amber')}</strong></div>
-          <div><span>Detected Public IP</span><strong><code>${esc(dnsStatus.serverIpv4 || '120.60.228.219')}</code></strong></div>
+          <div><span>Detected Public IP</span><strong><code>${esc(dnsStatus.serverIpv4 || 'Auto-detecting...')}</code></strong></div>
           <div><span>Edge Proxy</span><strong>${pill('Orange Cloud Ready', 'blue')}</strong></div>
           <div><span>Email DNS Suite</span><strong>${pill('MX · SPF · DMARC · DKIM', 'green')}</strong></div>
         </div>
@@ -80,11 +88,11 @@ async function tunnelPage(){
           <form id="cf-dns-web-form" class="card-pad" style="padding:16px 20px">
             <div class="form-grid">
               <label>Domain or Subdomain
-                <input id="cf-web-domain" placeholder="e.g. cyberpross.cc or app.cyberpross.cc" required>
+                <input id="cf-web-domain" placeholder="${webDomainPlaceholder}" required>
                 <span class="field-help">Must exist in your Cloudflare account.</span>
               </label>
               <label>Target Server IPv4
-                <input id="cf-web-ip" value="${esc(dnsStatus.serverIpv4 || '120.60.228.219')}" required>
+                <input id="cf-web-ip" value="${esc(dnsStatus.serverIpv4 || '')}" placeholder="e.g. 198.51.100.1" required>
                 <span class="field-help">Server public IP destination for traffic.</span>
               </label>
             </div>
@@ -107,7 +115,7 @@ async function tunnelPage(){
           <form id="cf-dns-email-form" class="card-pad" style="padding:16px 20px">
             <div class="form-grid">
               <label>Root Domain
-                <input id="cf-email-domain" placeholder="e.g. cyberpross.cc" required>
+                <input id="cf-email-domain" placeholder="${rootDomainPlaceholder}" required>
                 <span class="field-help">The primary email sending domain.</span>
               </label>
               <label>Mail Subdomain
@@ -143,7 +151,7 @@ async function tunnelPage(){
           <form id="cf-dns-cert-form" class="card-pad" style="padding:16px 20px">
             <div class="form-grid">
               <label>Domain Name
-                <input id="cf-cert-domain" placeholder="e.g. cyberpross.cc" required>
+                <input id="cf-cert-domain" placeholder="${webDomainPlaceholder}" required>
                 <span class="field-help">Domain to issue certificate for.</span>
               </label>
               <label>Certificate Authority Provider

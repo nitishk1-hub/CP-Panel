@@ -2,6 +2,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import net from 'node:net';
 import {bad} from './management.mjs';
 
@@ -240,10 +241,20 @@ export async function handleNetworkInspect({target = 'all'} = {}) {
 
   if (target === 'all' || target === 'tunnel') {
     const res = await runCmd('systemctl', ['is-active', 'cloudflared.service']);
+    let publicDomain = null;
+    if (process.env.PANEL_PUBLIC_URL) {
+      try { publicDomain = new URL(process.env.PANEL_PUBLIC_URL).hostname; } catch {}
+    }
+    if (!publicDomain) {
+      try {
+        const access = JSON.parse(await fs.readFile(path.join(process.env.PANEL_DATA_DIR || '/var/lib/server-panel', 'panel-access.json'), 'utf8'));
+        if (access?.origin) publicDomain = new URL(access.origin).hostname;
+      } catch {}
+    }
     result.cloudflareTunnel = {
       service: 'cloudflared.service',
       active: res.stdout === 'active',
-      publicDomain: 'cyber.cyberpross.cc'
+      publicDomain: publicDomain || os.hostname() || 'localhost'
     };
   }
 

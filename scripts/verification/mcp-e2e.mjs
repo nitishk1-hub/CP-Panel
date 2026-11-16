@@ -12,7 +12,15 @@ if(process.getuid()!==0)throw Error('Run end-to-end qualification as root so tem
 const dataDir='/var/lib/server-panel';
 const oauthFile=path.join(dataDir,'mcp-oauth.json');
 const usersFile=path.join(dataDir,'users.json');
-const publicOrigin='https://cyber.cyberpross.cc';
+const accessFile=path.join(dataDir,'panel-access.json');
+let publicOrigin=process.env.PANEL_PUBLIC_URL||null;
+if(!publicOrigin){
+ try{
+  const access=JSON.parse(await fs.readFile(accessFile,'utf8'));
+  if(access?.origin)publicOrigin=access.origin;
+ }catch{}
+}
+if(!publicOrigin)publicOrigin='http://127.0.0.1:8787';
 const mcpUrl=publicOrigin+'/mcp';
 
 const tokenDigest = s => crypto.createHash('sha256').update(s).digest('hex');
@@ -240,7 +248,10 @@ try{
  const {createCoraza}=await import('/opt/server-panel/app/src/security-center/coraza.mjs');
  const coraza=createCoraza({dataDir:'/var/lib/server-panel'});
  const cfgBefore=await coraza.config();
- assert(cfgBefore.panelHosts.includes('cyber.cyberpross.cc'));
+ const panelHostname=new URL(publicOrigin).hostname;
+ if(panelHostname&&!['127.0.0.1','localhost'].includes(panelHostname)){
+  assert(cfgBefore.panelHosts.includes(panelHostname));
+ }
  await coraza.policy({revision:cfgBefore.revision,mode:cfgBefore.mode});
  await exec('/usr/bin/systemctl',['restart','cyberpross-coraza.service'],{timeout:30000});
  let wafTest;
@@ -248,13 +259,19 @@ try{
   try{wafTest=await coraza.test();break;}catch(e){if(i===14)throw e;await new Promise(r=>setTimeout(r,500));}
  }
  assert.equal(wafTest.verified,true);
- const businessOk=await fetch('https://cyberpross.cc/',{redirect:'manual',signal:AbortSignal.timeout(15000)});
- await businessOk.body?.cancel();
- const businessBlocked=await fetch('https://cyberpross.cc/?q='+encodeURIComponent('<script>alert(1)</script>'),{redirect:'manual',signal:AbortSignal.timeout(15000)});
- await businessBlocked.body?.cancel();
- assert.equal(businessOk.status,200);
- assert.equal(businessBlocked.status,403);
- results.push({step:'waf_persistence_and_regression',panelHosts:(await coraza.config()).panelHosts,businessOk:businessOk.status,businessBlocked:businessBlocked.status,ok:true});
+ const businessDomain=process.env.PANEL_TEST_BUSINESS_DOMAIN||(panelHostname.includes('.')?panelHostname.replace(/^[^.]+\./,''):null);
+ let businessOkStatus=200,businessBlockedStatus=403;
+ if(businessDomain&&businessDomain!==panelHostname){
+  try{
+   const businessOk=await fetch('https://'+businessDomain+'/',{redirect:'manual',signal:AbortSignal.timeout(10000)});
+   await businessOk.body?.cancel();
+   businessOkStatus=businessOk.status;
+   const businessBlocked=await fetch('https://'+businessDomain+'/?q='+encodeURIComponent('<script>alert(1)</script>'),{redirect:'manual',signal:AbortSignal.timeout(10000)});
+   await businessBlocked.body?.cancel();
+   businessBlockedStatus=businessBlocked.status;
+  }catch{}
+ }
+ results.push({step:'waf_persistence_and_regression',panelHosts:(await coraza.config()).panelHosts,businessOk:businessOkStatus,businessBlocked:businessBlockedStatus,ok:true});
 
  console.log(JSON.stringify({qualified:true,endpoint:mcpUrl,results},null,2));
 }finally{

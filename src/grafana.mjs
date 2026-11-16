@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import {run,bad} from './management.mjs';
@@ -643,8 +644,8 @@ export function createGrafana({dataDir,panelPort=8787,execute=run,stream=dockerS
       headers:{
        'Content-Type':'application/json',
        Authorization:'Bearer '+aiCfg.apiKey,
-       'HTTP-Referer':'https://cyber.cyberpross.cc',
-       'X-Title':'CyberPross Server Panel'
+       'HTTP-Referer':(process.env.PANEL_PUBLIC_URL||'https://'+os.hostname()),
+       'X-Title':'Server Panel'
       },
       body:JSON.stringify({
        model,

@@ -36,7 +36,7 @@ function websiteTLS(s){
     <ul style="margin:0;padding-left:18px;line-height:1.6;font-size:13px;color:var(--text-muted, #94a3b8)">
       <li><strong>No local SSL required:</strong> The origin server operates securely on loopback HTTP (<code>127.0.0.1</code>) inside an encrypted tunnel.</li>
       <li><strong>No open ports:</strong> Inbound ports 80 and 443 do not need to be opened on your firewall or router.</li>
-      <li><strong>Automatic subdomains:</strong> Any subdomain (e.g., <code>app.cyberpross.cc</code>) automatically receives valid HTTPS at Cloudflare Edge.</li>
+      <li><strong>Automatic subdomains:</strong> Any configured domain or subdomain (e.g., <code>app.yourdomain.com</code>) automatically receives valid HTTPS at Cloudflare Edge.</li>
     </ul>
   </div>`;
 
