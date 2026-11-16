@@ -170,7 +170,7 @@ export async function handleGit({action, directory = '', repo = '', branch = '',
   }
 
   if (action === 'diff') {
-    const res = await runCmd('git', ['-C', dir, 'diff'], {maxBuffer: 1024 * 1024});
+    const res = await runCmd('git', ['-C', dir, 'diff'], {maxBuffer: 16 * 1024 * 1024});
     return {
       ok: res.ok,
       action: 'diff',

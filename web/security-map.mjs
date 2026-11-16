@@ -5,7 +5,7 @@ export function mount(element,locations,onSelect){
  try{capable=!!document.createElement('canvas').getContext('webgl2');}catch{}
  if(!capable)return fallback(element,locations,onSelect);
  const dark=document.documentElement.dataset.theme==='dark';
- const validLocations=(locations||[]).filter(v=>Number.isFinite(Number(v.latitude))&&Number.isFinite(Number(v.longitude)));
+ let validLocations=(locations||[]).filter(v=>Number.isFinite(Number(v.latitude))&&Number.isFinite(Number(v.longitude)));
  const countryCounts={};
  for(const v of locations||[]){
   const code=String(v.country||'').toUpperCase().trim();
@@ -28,6 +28,7 @@ export function mount(element,locations,onSelect){
 
  const map=new maplibregl.Map({
   container:element,
+  transformRequest:(url)=>({url,credentials:'same-origin'}),
   style:{
    version:8,
    sources:{
@@ -73,8 +74,55 @@ export function mount(element,locations,onSelect){
  map.on('mouseleave','attacks',()=>map.getCanvas().style.cursor='');
  map.on('mouseenter','land',e=>{const iso=e.features?.[0]?.properties?.iso;if(iso&&countryCounts[iso])map.getCanvas().style.cursor='pointer';});
  map.on('mouseleave','land',()=>map.getCanvas().style.cursor='');
- map.on('error',()=>{element.dataset.mapError='Map rendering unavailable';fallback(element,locations,onSelect);});
- return {dispose:()=>map.remove(),map};
+ let fallbackActive=false;
+ map.on('error',e=>{
+  const msg=String(e?.error?.message||e?.message||'');
+  if(/webgl|context lost|out of memory/i.test(msg)&&!fallbackActive){
+   fallbackActive=true;
+   element.dataset.mapError='Map rendering unavailable';
+   try{map.remove();}catch{}
+   fallback(element,validLocations,onSelect);
+  }
+ });
+ const update=(newLocations)=>{
+  validLocations=(newLocations||[]).filter(v=>Number.isFinite(Number(v.latitude))&&Number.isFinite(Number(v.longitude)));
+  const src=map.getSource('events');
+  if(src&&src.setData){
+   src.setData({
+    type:'FeatureCollection',
+    features:validLocations.map((v,i)=>({
+     type:'Feature',
+     geometry:{type:'Point',coordinates:[Number(v.longitude),Number(v.latitude)]},
+     properties:{index:i,count:v.count,blocked:['blocked','decision'].includes(v.verdict),engine:v.engine,country:v.country,city:v.city||'',source:v.source||'',severity:v.severity}
+    }))
+   });
+  }
+ };
+ return {dispose:()=>{try{map.remove();}catch{}},map,update};
 }
 
-function fallback(element,locations,onSelect){let disposed=false;element.classList.add('threat-world-map');fetch('/security-world.svg').then(r=>r.text()).then(svg=>{if(disposed||!element.isConnected)return;element.innerHTML=svg;const totals={};for(const v of locations)if(v.country)totals[v.country]=(totals[v.country]||0)+Number(v.count||0);const max=Math.max(1,...Object.values(totals));for(const shape of element.querySelectorAll('[data-country]')){const country=shape.dataset.country,n=totals[country]||0;shape.setAttribute('class','heat-'+(n?Math.max(1,Math.ceil(n/max*5)):0));shape.querySelector('title').textContent=country+': '+n+' retained events';if(n)shape.onclick=()=>onSelect?.({country});}const note=document.createElement('p');note.className='field-help';note.textContent='Country view: this browser does not provide WebGL2. Interactive vector maps are available in browsers with WebGL2.';element.append(note);});return {dispose(){disposed=true;}};}
+function fallback(element,locations,onSelect){
+ let disposed=false,currentLocs=locations||[];
+ const render=(locs)=>{
+  fetch('/security-world.svg').then(r=>r.text()).then(svg=>{
+   if(disposed||!element.isConnected)return;
+   element.innerHTML=svg;
+   const totals={};
+   for(const v of locs)if(v.country)totals[v.country]=(totals[v.country]||0)+Number(v.count||0);
+   const max=Math.max(1,...Object.values(totals));
+   for(const shape of element.querySelectorAll('[data-country]')){
+    const country=shape.dataset.country,n=totals[country]||0;
+    shape.setAttribute('class','heat-'+(n?Math.max(1,Math.ceil(n/max*5)):0));
+    shape.querySelector('title').textContent=country+': '+n+' retained events';
+    if(n)shape.onclick=()=>onSelect?.({country});
+   }
+   const note=document.createElement('p');
+   note.className='field-help';
+   note.textContent='Country view: this browser does not provide WebGL2. Interactive vector maps are available in browsers with WebGL2.';
+   element.append(note);
+  });
+ };
+ element.classList.add('threat-world-map');
+ render(currentLocs);
+ return {dispose(){disposed=true;},update(newLocs){currentLocs=newLocs||[];render(currentLocs);}};
+}

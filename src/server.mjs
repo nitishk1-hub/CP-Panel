@@ -112,7 +112,7 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
   const server=http.createServer({maxHeaderSize:64*1024},async(req,res)=>{
     const styleNonce=crypto.randomBytes(18).toString('base64');
     const requestId=crypto.randomUUID();let auditActor='anonymous',requestedPath='unknown';res.setHeader('X-Request-Id',requestId);
-    res.setHeader('Content-Security-Policy',`default-src 'self'; script-src 'self'; style-src 'self' 'nonce-${styleNonce}'; connect-src 'self'; img-src 'self' data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`);
+    res.setHeader('Content-Security-Policy',`default-src 'self'; script-src 'self'; style-src 'self' 'nonce-${styleNonce}'; connect-src 'self' data: blob:; img-src 'self' data: blob:; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`);
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('Cache-Control','no-store');
     const send=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(status>=400&&data&&typeof data==='object'&&!Array.isArray(data)?{...data,requestId}:data));};
     try {
@@ -268,13 +268,13 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
       if(url.pathname.startsWith('/api/security-center/')){
        admin();const ep=url.pathname.slice('/api/security-center/'.length),now=Date.now(),key=user.id,limit=securityLimits.get(key)||{at:now,count:0};if(now-limit.at>60000){limit.at=now;limit.count=0;}if(++limit.count>180)throw bad('Security request limit reached; retry shortly',429);if(securityLimits.size>100)securityLimits.clear();securityLimits.set(key,limit);
        if(req.method==='GET'){
-        if(ep==='status')return send(200,await securityCenter.overview());
+        if(ep==='status')return send(200,await securityCenter.overview({force:url.searchParams.get('refresh')==='1'||url.searchParams.get('force')==='1'}));
         if(ep==='traffic')return send(200,await securityCenter.traffic());
         if(ep==='rules')return send(200,await securityCenter.ruleCatalog.list(Object.fromEntries(url.searchParams)));
         if(ep==='events')return send(200,{events:await securityCenter.events(Object.fromEntries(url.searchParams))});
         if(ep==='incident')return send(200,await securityCenter.incident(url.searchParams.get('id')));
         if(ep==='export'){const events=await securityCenter.events({...Object.fromEntries(url.searchParams),limit:1000});await audit('security.events.exported');res.setHeader('Content-Disposition','attachment; filename="security-events.'+(url.searchParams.get('format')==='csv'?'csv':'json')+'"');if(url.searchParams.get('format')!=='csv')return send(200,{events,limit:1000});const keys=['id','occurred_at','engine','source','destination','protocol','rule_id','rule_name','severity','verdict','domain'];res.writeHead(200,{'Content-Type':'text/csv; charset=utf-8'});res.end([keys.map(csvCell).join(','),...events.map(e=>keys.map(k=>csvCell(e[k])).join(','))].join('\r\n'));return;}
-        const tile=ep.match(/^tiles\/(\d{1,2})\/(\d{1,3})\/(\d{1,3})\.pbf$/);if(tile){const bytes=await securityTile(...tile.slice(1).map(Number));res.writeHead(200,{'Content-Type':'application/x-protobuf','Cache-Control':'private, max-age=86400'});res.end(bytes);return;}
+        const tile=ep.match(/^tiles\/(\d{1,2})\/(\d{1,4})\/(\d{1,4})\.pbf$/);if(tile){try{const bytes=await securityTile(...tile.slice(1).map(Number));res.writeHead(200,{'Content-Type':'application/x-protobuf','Cache-Control':'private, max-age=86400'});res.end(bytes);return;}catch{res.writeHead(404,{'Content-Type':'application/x-protobuf'});res.end(Buffer.alloc(0));return;}}
         if(ep==='stream'){res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Accel-Buffering':'no'});res.write('event: ready\ndata: {}\n\n');const unsubscribe=securityCenter.subscribe(event=>{if(res.writableLength>65536)return res.end();res.write('event: security\ndata: '+JSON.stringify(event)+'\n\n');});const heartbeat=setInterval(()=>{if(identity.resolve(supplied)?.role!=='admin')return res.end();res.write(': heartbeat\n\n');},15000);heartbeat.unref();res.on('close',()=>{clearInterval(heartbeat);unsubscribe();});return;}
        }
        if(req.method==='POST'){const b=await body(req);if(b.confirm!==true)throw bad('Confirm this security change');
