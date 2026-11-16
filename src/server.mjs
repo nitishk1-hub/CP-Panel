@@ -514,5 +514,19 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
 if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
  const panel=await createPanel({port:Number(process.env.PANEL_PORT || 8787)});
  let stopping=false;for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{if(stopping)return;stopping=true;const deadline=setTimeout(()=>process.exit(1),12000);deadline.unref();panel.shutdown().then(()=>{clearTimeout(deadline);process.exitCode=0;},()=>{clearTimeout(deadline);process.exitCode=1;});});
- panel.server.listen(panel.port,'127.0.0.1',()=>{console.log(`CP-Panel (by CyberPross): http://127.0.0.1:${panel.server.address().port}/`);if(panel.initialCredentials){const c=panel.initialCredentials;console.log(`FIRST RUN — save these credentials securely. They are shown only once.\nAdministrator: ${c.username}\nTemporary password: ${c.password}\nRecovery code: ${c.recoveryCode}\nChange the temporary password at first login.`);}else console.log('Sign in with an existing account. For console recovery: npm run recover -- admin');});
+ panel.server.listen(panel.port,'127.0.0.1',async ()=>{
+  console.log(`CP-Panel (by CyberPross): http://127.0.0.1:${panel.server.address().port}/`);
+  if(panel.initialCredentials){
+    const c=panel.initialCredentials;
+    const targetDir=process.env.PANEL_DATA_DIR||'/var/lib/server-panel';
+    const credFile=path.join(targetDir,'initial-credentials.txt');
+    try{
+      await fs.mkdir(targetDir,{recursive:true,mode:0o700});
+      await fs.writeFile(credFile,`Administrator: ${c.username}\nTemporary password: ${c.password}\nRecovery code: ${c.recoveryCode}\n`,{mode:0o600,flag:'w'});
+      console.log(`FIRST RUN — initial administrator "${c.username}" generated. Credentials saved securely to ${credFile}. Remove after first sign-in.`);
+    }catch{
+      console.log(`FIRST RUN — initial administrator "${c.username}" generated. Access the panel or run: npm run recover -- admin`);
+    }
+  }else console.log('Sign in with an existing account. For console recovery: npm run recover -- admin');
+ });
 }

@@ -33,7 +33,7 @@ export function createNetworkIDS({dataDir,execute=run,unitDir='/etc/systemd/syst
    const load=exists?'masked':await execute('systemctl',['show','--property','LoadState','--value','suricata.service']);if(load!=='masked'){await execute('systemctl',['mask','--runtime','suricata.service']);masked=true;}
    await execute('apt-get',['update','--error-on=any'],{timeout:180000,maxBuffer:4*1024*1024});
    const plan=await execute('apt-get',['--simulate','--no-remove','--no-install-recommends','install',...(exists?['suricata-update']:['suricata','suricata-update'])],{timeout:120000,maxBuffer:4*1024*1024});if(/^Inst \S+ \[/m.test(plan))throw bad('Preinstallation would upgrade existing packages; review that package change separately');
-   await execute('apt-get',['--yes','--no-remove','--no-install-recommends','-o','Dpkg::Options::=--force-confold','install',...(exists?['suricata-update']:['suricata','suricata-update'])],{timeout:600000,maxBuffer:4*1024*1024,env:{...process.env,DEBIAN_FRONTEND:'noninteractive',LC_ALL:'C',NEEDRESTART_MODE:'l'}});
+   await execute('apt-get',['--yes','--no-remove','--no-install-recommends','-o','Dpkg::Options::=--force-confold','install',...(exists?['suricata-update']:['suricata','suricata-update'])],{timeout:600000,maxBuffer:4*1024*1024,env:{PATH:'/usr/sbin:/usr/bin:/sbin:/bin',DEBIAN_FRONTEND:'noninteractive',LC_ALL:'C',NEEDRESTART_MODE:'l'}});
    if(!exists)await execute('systemctl',['disable','suricata.service']);log('Installed. Prepare the separate panel IDS service before starting packet inspection.');
   }finally{if(masked)await execute('systemctl',['unmask','--runtime','suricata.service']).catch(()=>{});busy=false;}
  }

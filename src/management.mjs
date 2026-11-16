@@ -8,7 +8,34 @@ import {promisify} from 'node:util';
 import {summaryTemplate,portSummary} from './docker-model.mjs';
 import {createHostResources} from './host-resources.mjs';
 const exec=promisify(execFile);
-export const run=async(file,args=[],options={})=>{try{const r=await exec(file,args,{timeout:15000,maxBuffer:2*1024*1024,...options});return r.stdout.trim();}catch(e){throw Object.assign(new Error((e.stderr || e.message).trim().slice(0,2000)),{status:400});}};
+const SAFE_EXEC_ENV = {
+  PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+  LANG: 'C.UTF-8',
+  LC_ALL: 'C',
+};
+
+const sanitizeEnv = (customEnv) => {
+  const env = { ...SAFE_EXEC_ENV };
+  if (!customEnv || typeof customEnv !== 'object') return env;
+  const ALLOWED_KEYS = ['DEBIAN_FRONTEND', 'NEEDRESTART_MODE', 'TERM', 'HOME', 'USER'];
+  for (const key of ALLOWED_KEYS) {
+    if (typeof customEnv[key] === 'string' && !customEnv[key].includes('\0') && !customEnv[key].includes('\n')) {
+      env[key] = customEnv[key];
+    }
+  }
+  return env;
+};
+
+export const run=async(file,args=[],options={})=>{
+  try{
+    const {env, ...cleanOpts} = options;
+    const finalEnv = env ? sanitizeEnv(env) : SAFE_EXEC_ENV;
+    const r=await exec(file,args,{timeout:15000,maxBuffer:2*1024*1024,...cleanOpts,env:finalEnv});
+    return r.stdout.trim();
+  }catch(e){
+    throw Object.assign(new Error((e.stderr || e.message).trim().slice(0,2000)),{status:400});
+  }
+};
 const hostResources=createHostResources();
 export const bad=(message,status=400)=>Object.assign(new Error(message),{status});
 let lastCpu=null,metricsCache=null,metricsStamp=0,metricsInflight=null;
@@ -61,7 +88,7 @@ export async function dockerPackages(action,log){
  log('Using configured signed APT repositories. '+(action==='update'?'Upgrading ':'Installing ')+pkgs.join(', '));
  log(await privileged('apt-get',['update'],{timeout:180000}));
  for(const p of pkgs){const policy=await run('apt-cache',['policy',p]);if(!/Candidate: (?!\(none\))\S+/.test(policy))throw bad('No package candidate for '+p+'; no untrusted installer will be used');}
- log(await privileged('apt-get',['install','-y',...(action==='update'?['--only-upgrade']:[]),...pkgs],{timeout:900000,env:{...process.env,DEBIAN_FRONTEND:'noninteractive'}}));
+ log(await privileged('apt-get',['install','-y',...(action==='update'?['--only-upgrade']:[]),...pkgs],{timeout:900000,env:{DEBIAN_FRONTEND:'noninteractive'}}));
  log(await privileged('systemctl',['enable','--now','docker']));
  log('Completed. Existing daemon access permissions have been preserved.');
 }

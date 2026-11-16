@@ -9,7 +9,7 @@ export const databaseSoftware = {
     package: "mysql-server",
     unit: "mysql.service",
     server: (p) =>
-      /^mysql-(?:community-)?server(?:-(?:core|[0-9][a-z0-9.+-]*))*$/.test(p),
+      /^mysql-(?:community-)?server(?:-core)?(?:-[0-9][a-z0-9.+-]*)?$/.test(p),
     family: (p) => /^(?:default-mysql-server|mysql-)/.test(p),
     native: /\/(?:mysqld|mysql-systemd-start)(?:\s|;|$)/,
   },
@@ -33,7 +33,7 @@ export const databaseSoftware = {
     name: "MariaDB",
     package: "mariadb-server",
     unit: "mariadb.service",
-    server: (p) => /^mariadb-server(?:-(?:core|[0-9][a-z0-9.+-]*))*$/.test(p),
+    server: (p) => /^mariadb-server(?:-core)?(?:-[0-9][a-z0-9.+-]*)?$/.test(p),
     family: (p) => /^(?:default-mysql-server|mariadb-)/.test(p),
     native: /\/(?:mariadbd|mysqld)(?:\s|;|$)/,
   },
@@ -114,7 +114,7 @@ export function nativePackageStream(args, log) {
     const child = spawn("apt-get", args, {
       stdio: ["ignore", "pipe", "pipe"],
       env: {
-        ...process.env,
+        PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         LC_ALL: "C",
         DEBIAN_FRONTEND: "noninteractive",
         NEEDRESTART_MODE: "l",
@@ -190,7 +190,7 @@ export function createDatabases({
   let busy = false;
   const plans = new Map(),
     env = {
-      ...process.env,
+      PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
       LC_ALL: "C",
       DEBIAN_FRONTEND: "noninteractive",
       NEEDRESTART_MODE: "l",

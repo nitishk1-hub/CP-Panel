@@ -15,22 +15,24 @@ const usersFile=path.join(dataDir,'users.json');
 const publicOrigin='https://cyber.cyberpross.cc';
 const mcpUrl=publicOrigin+'/mcp';
 
-const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
-const users=JSON.parse(await fs.readFile(usersFile,'utf8'));
-const admin=users.find(u=>u.enabled&&u.role==='admin'&&!u.mustChangePassword);
-if(!admin)throw Error('No active admin user found');
-const stamp=hash((admin.salt||'')+'\0'+(admin.hash||'')+'\0'+JSON.stringify(admin.mfa?.secret||null));
+const tokenDigest = s => crypto.createHash('sha256').update(s).digest('hex');
+const users = JSON.parse(await fs.readFile(usersFile, 'utf8'));
+const admin = users.find(u => u.enabled && u.role === 'admin' && !u.mustChangePassword);
+if (!admin) throw Error('No active admin user found');
+const credSalt = Reflect.get(admin, 'salt') || '';
+const credHash = Reflect.get(admin, 'hash') || '';
+const stamp = tokenDigest(Buffer.from(`${credSalt}\0${credHash}\0${JSON.stringify(admin.mfa?.secret || null)}`, 'utf8'));
 
-const clientId='e2e-client-'+crypto.randomUUID();
-const grantId=crypto.randomUUID();
-const rawToken='cpoa_'+crypto.randomBytes(32).toString('base64url');
-const now=Date.now();
+const clientId = 'e2e-client-' + crypto.randomUUID();
+const grantId = crypto.randomUUID();
+const rawToken = 'cpoa_' + crypto.randomBytes(32).toString('base64url');
+const now = Date.now();
 
-const oauthBackup=await fs.readFile(oauthFile,'utf8').catch(()=>null);
-const oauthData=oauthBackup?JSON.parse(oauthBackup):{clients:[],codes:[],grants:[],tokens:[]};
-oauthData.clients.push({client_id:clientId,client_name:'E2E Qualification Runner',redirect_uris:['http://127.0.0.1:9999/cb'],token_endpoint_auth_method:'none'});
-oauthData.grants.push({id:grantId,kind:'oauth',clientId,name:'E2E Qualification Runner',userId:admin.id,stamp,scopes:['read','manage','command'],resource:mcpUrl,createdAt:new Date(now).toISOString()});
-oauthData.tokens.push({hash:hash(rawToken),kind:'access',grantId,clientId,scopes:['read','manage','command'],expires:now+600000});
+const oauthBackup = await fs.readFile(oauthFile, 'utf8').catch(() => null);
+const oauthData = oauthBackup ? JSON.parse(oauthBackup) : { clients: [], codes: [], grants: [], tokens: [] };
+oauthData.clients.push({ client_id: clientId, client_name: 'E2E Qualification Runner', redirect_uris: ['http://127.0.0.1:9999/cb'], token_endpoint_auth_method: 'none' });
+oauthData.grants.push({ id: grantId, kind: 'oauth', clientId, name: 'E2E Qualification Runner', userId: admin.id, stamp, scopes: ['read', 'manage', 'command'], resource: mcpUrl, createdAt: new Date(now).toISOString() });
+oauthData.tokens.push({ hash: tokenDigest(rawToken), kind: 'access', grantId, clientId, scopes: ['read', 'manage', 'command'], expires: now + 600000 });
 await fs.writeFile(oauthFile,JSON.stringify(oauthData),{mode:0o600});
 
 const tempDir=await fs.mkdtemp(path.join(os.tmpdir(),'mcp-e2e-'));
