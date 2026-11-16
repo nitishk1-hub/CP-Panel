@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 [[ ${EUID} -eq 0 ]] || { echo 'Host administrator authorization is required to update the protected service.' >&2; exit 1; }
-source_dir=${1:?Panel source directory is required}
+source_dir=${1:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)}
 exec 8>/run/lock/server-panel-transition.lock
 flock -n 8 || { echo 'Another panel installation/update is running.'; exit 1; }
 python3 - <<'TASK_CHECK'
