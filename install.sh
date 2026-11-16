@@ -195,6 +195,13 @@ install_docker() {
   else
     echo -e "${GREEN}[✓] Docker Engine is ready ($(docker --version 2>/dev/null | head -n 1)).${NC}"
   fi
+  # Pre-cache official Node.js website sandbox container image
+  if command -v docker >/dev/null 2>&1 && systemctl is-active --quiet docker 2>/dev/null; then
+    if ! docker image inspect node:24-bookworm-slim >/dev/null 2>&1; then
+      echo -e "${CYAN}[*] Pre-caching isolated Node.js website sandbox image (node:24-bookworm-slim)...${NC}"
+      docker pull node:24-bookworm-slim >/dev/null 2>&1 || true
+    fi
+  fi
 }
 
 install_dependencies
