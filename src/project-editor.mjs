@@ -36,8 +36,9 @@ function validateRelativePath(workspace, relPath) {
   return {normalized, target};
 }
 
-export async function handleProjectRead({workspace, paths = [], includeContent = false, maxFiles = 150}) {
-  const dir = resolveWorkspace(workspace);
+export async function handleProjectRead({workspace, directory, paths = [], includeContent = false, maxFiles = 150}) {
+  const rawDir = workspace || directory;
+  const dir = resolveWorkspace(rawDir);
   try {
     const st = await fs.stat(dir);
     if (!st.isDirectory()) throw bad(`Workspace directory not found: ${dir}`);
@@ -134,8 +135,9 @@ export async function handleProjectRead({workspace, paths = [], includeContent =
   return {ok: true, workspace: dir, fileCount: files.length, files};
 }
 
-export async function handleProjectEdit({workspace, operations = [], dryRun = false, confirm = false}) {
-  const dir = resolveWorkspace(workspace);
+export async function handleProjectEdit({workspace, directory, operations = [], dryRun = false, confirm = false}) {
+  const rawDir = workspace || directory;
+  const dir = resolveWorkspace(rawDir);
   if (!Array.isArray(operations) || operations.length === 0) {
     throw bad('Supply at least one file operation in operations array');
   }

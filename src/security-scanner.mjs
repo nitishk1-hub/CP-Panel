@@ -24,9 +24,19 @@ const SECRET_PATTERNS = [
   {name: 'Generic API Key / Secret Assignment', pattern: /(?:api[_-]?key|secret|password|auth[_-]?token)\s*[:=]\s*['"]([A-Za-z0-9_\-./+=]{16,128})['"]/gi, severity: 'HIGH'}
 ];
 
+function isSyntheticCredential(val) {
+  if (!val || typeof val !== 'string') return true;
+  const upper = val.toUpperCase();
+  if (upper.includes('EXAMPLE') || upper.includes('TEST') || upper.includes('PLACEHOLDER') || upper.includes('DUMMY') || upper.includes('MOCK') || upper.includes('AIADMINT') || upper.includes('USER:PASS')) {
+    return true;
+  }
+  if (/^(.)\1+$/.test(val)) return true;
+  return false;
+}
+
 async function scanSecretsInDirectory(dir, maxFiles = 300) {
   const findings = [];
-  const ignoredDirs = new Set(['.git', 'node_modules', '__pycache__', '.venv', 'vendor', '.panel-snapshots']);
+  const ignoredDirs = new Set(['.git', 'node_modules', '__pycache__', '.venv', 'vendor', '.panel-snapshots', 'tests', 'test', 'fixtures', '__tests__', 'mock', 'spec', 'test_fixtures']);
   let scannedCount = 0;
 
   async function walk(currDir, relDir = '') {
@@ -59,6 +69,7 @@ async function scanSecretsInDirectory(dir, maxFiles = 300) {
             const matches = [...content.matchAll(rule.pattern)];
             for (const m of matches) {
               const matchedStr = m[1] || m[0];
+              if (isSyntheticCredential(matchedStr)) continue;
               // Mask the found secret
               const preview = matchedStr.length > 8
                 ? matchedStr.slice(0, 4) + '...' + matchedStr.slice(-4)

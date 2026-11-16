@@ -72,12 +72,31 @@ export async function handleDeploy({
   deploymentId,
   releaseId,
   project = {},
+  name,
+  domain,
+  directory,
+  type,
+  port,
+  test,
+  build,
+  waf,
   confirm = false,
   dataDir = '',
   websitesService = null
 }) {
   const deploymentsDir = getDeploymentsDir(dataDir);
   const state = await loadDeploymentsState(deploymentsDir);
+
+  const mergedProject = {
+    name: name || project.name,
+    domain: domain || project.domain,
+    directory: directory || project.directory,
+    type: type || project.type || 'node',
+    port: port || project.port,
+    test: test || project.test,
+    build: build || project.build,
+    waf: waf || project.waf
+  };
 
   // 1. History
   if (action === 'history') {
@@ -99,7 +118,7 @@ export async function handleDeploy({
 
   // 3. Preview Action
   if (action === 'preview') {
-    const {name, directory, type = 'node', domain, port, test, build, waf} = project;
+    const {name, directory, type = 'node', domain, port, test, build, waf} = mergedProject;
     if (!name || typeof name !== 'string') throw bad('Specify application name');
     if (!domain || typeof domain !== 'string') throw bad('Specify domain name');
     const upstreamPort = Number(port || (type === 'static' ? 80 : 3000));
@@ -226,7 +245,7 @@ export async function handleDeploy({
 
   // 5. Deploy Action
   if (action === 'deploy') {
-    let proj = project;
+    let proj = mergedProject.name && mergedProject.domain ? mergedProject : project;
     if (previewId) {
       const prev = state.previews[previewId];
       if (!prev) throw bad(`Deployment preview not found or expired: "${previewId}"`, 404);

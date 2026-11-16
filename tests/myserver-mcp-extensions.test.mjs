@@ -58,11 +58,15 @@ test('P0: Transactional multi-file project editing enforces revisions, snapshots
     assert(editRes.revisions['src/index.js']);
     const indexRev = editRes.revisions['src/index.js'];
 
-    // 4. Project Read
+    // 4. Project Read (supports both workspace and directory alias)
     const readRes = await handleProjectRead({workspace: dir, paths: ['src/index.js']});
     assert.equal(readRes.ok, true);
     assert.equal(readRes.files[0].revision, indexRev);
     assert.equal(readRes.files[0].content, 'console.log("hello");\n');
+
+    const readAliasRes = await handleProjectRead({directory: dir, paths: ['src/index.js']});
+    assert.equal(readAliasRes.ok, true);
+    assert.equal(readAliasRes.files[0].revision, indexRev);
 
     // 5. Revision conflict check on patch
     await assert.rejects(handleProjectEdit({
@@ -257,29 +261,56 @@ test('P1 & P2: Docker security inspect, log correlation, security scanning, WAF 
   const docSec = await handleDockerSecurityInspect({target: 'all'});
   assert.equal(typeof docSec.ok, 'boolean');
   assert(Array.isArray(docSec.containers));
+  const dindRunner = docSec.containers.find(c => c.name?.includes('runner-dind') || c.name?.includes('sandbox-runner'));
+  if (dindRunner) {
+    assert.equal(dindRunner.isolation.isDinDRunner, true);
+    assert.equal(dindRunner.isolation.isolatedSandboxVerified, true);
+    assert.equal(dindRunner.isolation.hostSocketExposed, false);
+    assert.equal(dindRunner.isolation.hostNetworkMode, false);
+  }
 
   // 2. Correlated logs search with secret redaction
   const logsRes = await handleLogsCorrelate({limit: 10, sources: ['systemd']});
   assert.equal(logsRes.ok, true);
   assert(Array.isArray(logsRes.logs));
 
-  // 3. Security scanner
+  // 3. Security scanner ignores synthetic test credentials and test fixture directories
   const scanRes = await handleSecurityScan({target: 'secrets', directory: process.cwd()});
   assert.equal(scanRes.ok, true);
   assert(scanRes.summary);
   assert(Array.isArray(scanRes.secrets));
+  // Ensure no test fixtures are flagged as real secrets
+  for (const s of scanRes.secrets) {
+    assert(!s.file.includes('tests/'), `Scanner should not flag test files: ${s.file}`);
+  }
 
   // 4. Per-domain WAF verification
-  const wafRes = await handleWafVerify({domain: 'localhost', port: 8787});
-  assert.equal(wafRes.ok, true);
-  assert(wafRes.route);
-  assert(wafRes.corazaWaf);
-  assert(wafRes.enforcementEvidence);
+  // 4a. Panel domain: preserves intentional management bypass
+  const panelWaf = await handleWafVerify({domain: 'cyber.cyberpross.cc'});
+  assert.equal(panelWaf.ok, true);
+  assert.equal(panelWaf.status, 'panel_bypass_preserved');
+  assert.equal(panelWaf.isIntentionalBypass, true);
+  assert.equal(panelWaf.wafMode, 'bypass');
+  assert.equal(panelWaf.trafficProtected, true);
 
-  // 5. Application Inventory
+  // 4b. Application domain (n8n): verifies active protection with webhook exclusions
+  const n8nWaf = await handleWafVerify({domain: 'n8n.cyberpross.cc'});
+  assert.equal(n8nWaf.ok, true);
+  assert.equal(n8nWaf.status, 'enforcing');
+  assert.equal(n8nWaf.isIntentionalBypass, false);
+  assert.equal(n8nWaf.trafficProtected, true);
+  assert.equal(n8nWaf.corazaWaf.webhookExclusionsApplied, true);
+
+  // 5. Application Inventory: correlates nginx routes and containers
   const appInv = await handleAppInventory();
   assert.equal(appInv.ok, true);
   assert(Array.isArray(appInv.applications));
+  assert(appInv.totalApplications >= 1);
+  const n8nApp = appInv.applications.find(a => a.domain === 'n8n.cyberpross.cc');
+  if (n8nApp) {
+    assert.equal(n8nApp.upstream, 'http://127.0.0.1:5678');
+    assert.equal(n8nApp.wafProtected, true);
+  }
 
   // 6. Backup inventory and verification
   const backupInv = await handleBackup({action: 'inventory'});
