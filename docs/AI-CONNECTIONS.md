@@ -106,3 +106,65 @@ service auto-restarts are rejected. Authorized repair policy persists across res
 features. Migrating the whole panel to an unprivileged service account requires
 additional compatibility work; the socket boundary alone does not establish that
 separation.
+
+## Full Inventory of 43 Production MCP Tools
+
+CP-Panel advertises 43 structured tools across 7 functional domains:
+
+### 1. Developer Operations & Autonomous Toolchain (NEW)
+- `panel_apt`: Safe Ubuntu/Debian APT package management. Supports actions: `search`, `info`, `upgradable`, `simulate` (dry-run with `-s`), `update`, `install`, and `upgrade`.
+- `panel_git`: Full Git version control workflow: `clone`, `pull`, `status`, `log`, `diff`, `branch`, and `checkout`.
+- `panel_docker_build`: Build custom Docker container images with `--build-arg`, Dockerfile paths, and streaming logs.
+- `panel_test_runner`: Automated isolated rootless test runner for Node (`npm test`), Python (`pytest`), Rust (`cargo test`), and Go (`go test`) using `--network none` and read-only code mounts.
+
+### 2. Security, Network & Threat Inspection (NEW)
+- `panel_security_inspect`: Read-only structured telemetry: Coraza WAF active rulesets and per-domain exclusions, CrowdSec decisions and registered bouncers, and Suricata IDS alerts.
+- `panel_network_inspect`: Read-only structured network telemetry: active listening sockets (`ss -tulpn`), UFW firewall rules, and Cloudflare Tunnel routing.
+- `panel_waf_exempt`: Per-domain WAF rule ID exclusion manager to eliminate false positives without weakening global rules.
+
+### 3. System & Daemon Supervision
+- `panel_systemd`: Inspect service status, reload systemd daemon, restart and control services.
+- `panel_nginx`: Validate syntax (`nginx -t`), reload, restart, and inspect active reverse proxy configurations.
+- `panel_docker`: Container status, inspect, stop, restart, and resource telemetry.
+- `panel_compose`: Validate, deploy, update, restart, and manage multi-container Compose projects.
+- `panel_cloudflare`: Inspect Cloudflare Tunnel status, connector health, and public ingress mappings.
+- `panel_coraza`: WAF status, OWASP CRS v4 ruleset coverage, and blocking mode.
+- `panel_crowdsec`: CrowdSec LAPI status, active decisions, and bouncer connectivity.
+
+### 4. Web Engine & Deployments
+- `panel_static_preview`: Validate static file directories prior to atomic symlink deployment.
+- `panel_static_deploy`: Deploy static sites with zero-downtime atomic directory swaps.
+- `panel_proxy_create`: Configure reverse proxy vhosts with WebSocket, HTTP/2, and TLS termination.
+- `panel_website_import`: Deploy multi-runtime web applications (Node.js, Python, PHP, Static) in isolated container sandboxes.
+- `panel_ssl_acme`: Request, issue, and manage Let's Encrypt / ZeroSSL TLS certificates via ACME.
+
+### 5. Transactional File Studio
+- `panel_file_upload`: Safe atomic file upload (up to 1 MiB) through the privileged agent socket.
+- `panel_file_owner`: Safe numeric ownership (`chown`) changes with directory boundary enforcement.
+- `panel_file_permissions`: Safe file permission (`chmod`) changes.
+- `panel_file_read`: Read regular text files with path traversal checks.
+- `panel_file_edit`: Atomically edit regular text files with preflight validation and automated rollback.
+- `panel_file_restore`: Restore prior file versions from private transactional snapshots.
+- `panel_transactions`: List persistent transaction history and rollback records.
+
+### 6. Durable Tasks & Execution
+- `panel_exec`: Execute root-capable background jobs through the privileged agent socket.
+- `panel_operations`: List active and completed durable jobs surviving panel restarts.
+- `panel_operation`: Inspect status, exit code, execution duration, and signal of a specific job.
+- `panel_operation_logs`: Read bounded chunks of operation output logs.
+- `panel_discover`: Explore panel API routes and capabilities.
+- `panel_read`: Inspect panel API endpoints.
+- `panel_manage`: Execute high-level administrative tasks.
+- `panel_command`: Run noninteractive shell commands with output limits.
+
+### 7. Cloud, Observability & Alerts
+- `panel_app_catalog`: Browse curated 1-click Docker Compose open-source applications.
+- `panel_app_deploy`: Deploy 1-click apps with automated volume and port mappings.
+- `panel_backup_cloud`: AES-256-GCM encrypted S3-compatible cloud backups (AWS S3, Cloudflare R2, MinIO, Backblaze B2).
+- `panel_cron_manage`: Schedule and inspect recurring cron jobs with execution histories.
+- `panel_health_policy`: Authorize safe automatic service restart policies with 15-minute cooldown caps.
+- `panel_health`: Real-time health monitoring of systemd units, Docker containers, disk space, and HTTP endpoints.
+- `panel_grafana`: Independent Grafana 11 dashboard and Prometheus datasource management.
+- `panel_graph`: Token-efficient Graphify semantic knowledge graph queries for architecture & codebase context.
+- `panel_notification_test`: Dispatch multi-channel incident alerts (Telegram, Discord, Slack, Custom Webhooks) with live previews.
+

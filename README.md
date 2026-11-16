@@ -1,22 +1,23 @@
 <div align="center">
 
 # 🛡️ CP-Panel · by CyberPross
-### The Open-Source, Zero-Trust Linux Server Management & Cloud Hosting Control Plane
+### The Enterprise Zero-Trust Linux Server Management & Autonomous AI Control Plane
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Node.js: >=24](https://img.shields.io/badge/Node.js-%3E%3D24-brightgreen.svg)](https://nodejs.org)
+[![Release: v0.2.0-rc.1](https://img.shields.io/badge/Release-v0.2.0--rc.1-blue.svg)](https://github.com/nitishk1-hub/CP-Panel/releases)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+[![Node.js: >=24](https://img.shields.io/badge/Node.js-%3E%3D24_LTS-brightgreen.svg)](https://nodejs.org)
 [![Security: Coraza WAF + CRS v4 + CrowdSec](https://img.shields.io/badge/Security-Coraza_WAF_%2B_CRS_v4_%2B_CrowdSec-amber.svg)](docs/WAF-AND-VAULT.md)
-[![Architecture: Zero-Trust Loopback Tunnel](https://img.shields.io/badge/Architecture-Cloudflare_Tunnel_First-blueviolet.svg)](docs/PANEL-ACCESS.md)
-[![AI Integration: MCP + OpenRouter](https://img.shields.io/badge/AI-Model_Context_Protocol_%2B_OpenRouter-teal.svg)](docs/AI-CONNECTIONS.md)
-[![Monitoring: Grafana 11 + Prometheus](https://img.shields.io/badge/Observability-Grafana_11_%2B_Prometheus-orange.svg)](docs/GRAFANA-PANEL-ARCHITECTURE.md)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Zero-Trust Architecture](https://img.shields.io/badge/Architecture-0_Inbound_Ports_%7C_Cloudflare_Tunnel-blueviolet.svg)](docs/PANEL-ACCESS.md)
+[![AI Control: 43 MCP Tools](https://img.shields.io/badge/AI_DevOps-43_MCP_Tools_%2B_OAuth2_PKCE-teal.svg)](docs/AI-CONNECTIONS.md)
+[![Observability: Grafana 11 + Prometheus](https://img.shields.io/badge/Observability-Grafana_11_%2B_Prometheus-orange.svg)](docs/GRAFANA-PANEL-ARCHITECTURE.md)
+[![Tests Passing: 16/16](https://img.shields.io/badge/Tests-16%2F16_Passing-success.svg)](tests/)
 
 <p align="center">
   <b>CP-Panel</b> is a next-generation, high-performance, open-source Linux server management panel developed by <b>CyberPross</b>.<br>
-  Engineered from the ground up for zero-trust privacy, enterprise WAF defense, Docker container orchestration, native web hosting, and AI-driven autonomous DevOps.
+  Built from the ground up for <b>Zero-Trust Privacy</b>, <b>Inline Coraza WAF Defense</b>, <b>Isolated Docker Orchestration</b>, <b>Multi-Channel Incident Dispatching</b>, and <b>Autonomous AI DevOps via Model Context Protocol (MCP)</b>.
 </p>
 
-[Quick Start](#-quick-start) • [Key Features](#-features--capabilities) • [Architecture](#-zero-trust-architecture) • [Documentation](#-documentation) • [FAQ](#-frequently-asked-questions-faq) • [License](#-license)
+[Quick Start](#-quick-start) • [Why CP-Panel?](#-why-cp-panel) • [Features](#-core-features--capabilities) • [43 MCP Tools](#-autonomous-ai-devops--model-context-protocol-mcp) • [Zero-Trust Architecture](#-zero-trust-loopback-architecture) • [Documentation](#-documentation) • [FAQ](#-frequently-asked-questions-faq) • [License](#-license)
 
 </div>
 
@@ -24,56 +25,146 @@
 
 ## 🌟 Why CP-Panel?
 
-Traditional web hosting control panels (such as **cPanel**, **Plesk**, **1Panel**, **aaPanel**, or **CyberPanel**) typically require exposing raw management ports (like 2083, 8888, or 8090) directly to the public internet, exposing your servers to automated port-scanners, brute-force attacks, and unauthenticated exploits.
+Traditional web hosting control panels (such as **cPanel**, **Plesk**, **1Panel**, **aaPanel**, or **CyberPanel**) typically mandate exposing raw management ports (such as `2083`, `8888`, or `8090`) and raw web ports (`80`, `443`) directly to the public internet. This leaves servers vulnerable to automated port scanners, credential brute-forcing, zero-day unauthenticated exploits, and DDoS floods.
 
-**CP-Panel** fundamentally redesigns server administration around **Zero-Trust Loopback Isolation**:
-* **Zero Publicly Exposed Ports**: The panel binds strictly to internal loopback (`127.0.0.1:8787`). Public access routes securely through Cloudflare Tunnels (`cloudflared`) with zero firewall ports open (no 80, 443, or management ports).
-* **Enterprise Security First**: Built-in **Coraza HTTP WAF** with OWASP Core Rule Set (CRS v4), **CrowdSec** global threat intelligence, **Suricata IDS** deep packet inspection, and an interactive WebGL live threat map.
-* **100% Free & Open-Source**: Licensed under the **Apache License 2.0**. No paywalled features, no artificial container limits, and zero external telemetry.
-* **AI & Agent-Native**: Features an embedded **Model Context Protocol (MCP)** server with **37 tools** and direct integration with **OpenRouter AI** (Claude 3.5 Sonnet, DeepSeek R1, GPT-4o, Llama 3.3) and local **Graphify** semantic knowledge graphs.
+**CP-Panel** redefines server administration around a modern, battle-tested security model:
+
+| Dimension | Traditional Panels (cPanel / aaPanel / 1Panel) | CP-Panel (CyberPross) |
+| :--- | :--- | :--- |
+| **Firewall Inbound Ports** | Exposes 80, 443, 2083, 8888, 21, etc. | **0 Inbound Ports Open** (Strict loopback isolation via Cloudflare Tunnel) |
+| **Web Application Firewall** | Basic ModSecurity or paid commercial plugins | **Coraza HTTP WAF** with OWASP Core Rule Set (CRS v4) built-in |
+| **Intrusion Prevention** | Standalone Fail2ban with local-only knowledge | **CrowdSec LAPI** distributed global threat intelligence mesh |
+| **AI Integration** | None, or basic text generation wrappers | **43 Production MCP Tools** with OAuth 2.0 PKCE & Streamable HTTP |
+| **Runtime Isolation** | Shared root/user processes on host | **Containerized Sandbox Runtimes** (`node:24-bookworm-slim`, PHP, Python) |
+| **Incident Notifications** | Rudimentary email alerts | **Centralized Dispatcher** (Telegram, Discord, Slack, HMAC Webhooks) |
+| **Observability** | Basic system stats or paid third-party add-ons | **Embedded Grafana 11 & Prometheus** with adaptive low-load sampling |
+| **Licensing** | Expensive recurring per-server or per-account fees | **100% Free & Open-Source (Apache License 2.0)** with zero telemetry |
 
 ---
 
-## ⚡ Features & Capabilities
+## 🔒 Zero-Trust Loopback Architecture
 
-### 🛡️ 1. Enterprise Cybersecurity Command Center
-* **Coraza HTTP WAF**: Native Web Application Firewall enforcing OWASP CRS v4 signatures against SQL Injection (SQLi), Cross-Site Scripting (XSS), Local File Inclusion (LFI), and Remote Code Execution (RCE).
-* **CrowdSec LAPI Integration**: Distributed community-powered IP reputation mesh that automatically blocks aggressive port scanners and malicious crawlers.
-* **Interactive Threat Origin Map**: MapLibre GL WebGL vector map clustering attack origins in real time with ASN, country, and city geolocation intelligence.
-* **Rapid IP Triage**: Instant one-click IP unblock, trusted allowlisting, and temporary or permanent ban management.
-* **Virtual Host WAF Rules**: Per-domain WAF mode selection (Enforce, Audit, Bypass) and false-positive rule exclusion manager with automated rollback.
+### Why 0 Open Inbound Ports?
+When hosting services over standard public ports (`80`, `443`, `2087`), attackers can discover your server's true origin IP through scanning services (Censys, Shodan, ZoomEye), completely bypassing DNS-level Cloudflare protections.
 
-### 🐳 2. Docker Orchestration & 1-Click App Store
-* **Container Lifecycle Management**: Start, stop, restart, inspect, view live logs, and access container terminals.
-* **Visual Compose Studio**: Multi-file Docker Compose workspace with YAML linting, environment variable injection, and automated drift detection.
-* **Network & Volume Manager**: Create, isolate, and prune bridge/overlay networks and persistent volumes.
-* **1-Click Application Store**: Deploy popular open-source software (PostgreSQL, MySQL, Redis, Nginx, SearXNG, n8n, Jellyfin, WordPress, Nextcloud, and more) with one click.
-* **Private Image Registries**: Seamless authentication for Docker Hub, GitHub Container Registry (ghcr.io), AWS ECR, and self-hosted registries.
+With **CP-Panel's Cloudflare Tunnel-First Architecture**:
+1. Your firewall (**UFW / nftables**) blocks **all public inbound traffic** (inbound ports `80`, `443`, `2087`, `8787` are closed).
+2. The lightweight `cloudflared` daemon establishes secure, outbound-only QUIC/TLS tunnels to Cloudflare's global edge Anycast network.
+3. Inbound user traffic arrives at Cloudflare Edge (DDoS mitigation, Edge SSL, WAF), tunnels directly into the host loopback adapter (`127.0.0.1:19180`), and passes through the **Coraza WAF** before reaching **CP-Panel** or your containerized web applications.
+4. Your server's true origin IP is **never exposed**, making direct network-level attacks impossible.
 
-### 📊 3. Embedded Observability (Grafana 11 + Prometheus)
-* **Pre-Configured Dashboards**: Pre-provisioned `CyberPross Server Overview` and `Security Center` dashboards embedded natively inside the panel.
-* **Prometheus Time-Series Metrics**: Automatic scraping of CPU, RAM, disk I/O, network bandwidth, container metrics, and WAF drops.
-* **Low-Load Adaptive Polling**: Configurable polling intervals (15s, 30s, 60s) with low-load mode to preserve host resources.
-* **Autonomous Health Monitor**: Continuous monitoring of systemd units, Docker healthchecks, and HTTP endpoints with automated self-healing restart policies.
+```
+                                  [ INTERNET ]
+                                       │
+                         Cloudflare Edge (WAF, DDoS, SSL)
+                                       │
+                      Cloudflare Tunnel (Outbound Encrypted Wire)
+                                       │
+┌────────────────────────────── SERVER / HOST ──────────────────────────────┐
+│                                                                           │
+│  [ cloudflared ] (Loopback connector · Zero open inbound ports required)  │
+│        │                                                                  │
+│        ▼ (127.0.0.1:19180)                                                │
+│  [ Coraza WAF Gateway ] (OWASP Core Rule Set v4 Signature Engine)         │
+│        │                                                                  │
+│        ▼ (127.0.0.1:8787)                                                 │
+│  [ CP-Panel Core Engine ] ──► [ Privileged Agent (Unix Domain Socket) ]   │
+│        │                                   │                              │
+│        ├─► Docker Compose & Containers     ├─► Systemd Service Control    │
+│        ├─► Isolated Web Sandboxes (Node)   ├─► Atomic Transactional FS    │
+│        ├─► Embedded Grafana 11 Dashboard   ├─► Suricata IDS & Threat Map  │
+│        ├─► Incident Dispatcher (Webhooks)  ├─► CrowdSec LAPI Threat Mesh  │
+│        └─► 43 Remote MCP AI Tools          └─► Automated Service Recovery │
+│                                                                           │
+└───────────────────────────────────────────────────────────────────────────┘
+```
 
-### 🤖 4. AI Copilot & Model Context Protocol (MCP)
-* **OpenRouter AI Integration**: Connect any state-of-the-art LLM via OpenRouter (Claude 3.5 Sonnet, DeepSeek V3/R1, Llama 3.3 70B, GPT-4o).
-* **Model Context Protocol (MCP) Server**: 37 production-ready tools allowing external agents (Antigravity, Claude Code, Cursor) to manage containers, inspect logs, deploy static sites, and query server health.
-* **Graphify Knowledge Graph**: Graph-based AST index reducing token consumption by **35.4x–77.8x** for intelligent server diagnosis and troubleshooting.
+---
 
-### 🌐 5. Modern Web Engine & Reverse Proxies
-* **Multi-Runtime Hosting**: Host Reverse Proxies, Static Websites, Node.js applications, Python WSGI/ASGI apps, and PHP-FPM environments.
-* **Zero-Downtime Deployments**: Atomic symlink exchange with automatic rollback upon HTTP health check failure.
-* **Automated SSL/TLS**: Cloudflare Edge SSL termination or automated Let's Encrypt / ACME certificate issuance.
+## ⚡ Core Features & Capabilities
 
-### 📁 6. Advanced File Manager & Web Terminal
-* **File Studio**: Visual directory explorer, file editor with syntax highlighting, permissions (`chmod`/`chown`), compressed archive extraction (`.tar.gz`, `.zip`), and trash can recovery.
-* **Multi-Tab Web Terminal**: Full-featured xterm.js terminal with split-pane support, custom color themes, and ANSI/UTF-8 rendering.
+### 🛡️ 1. Enterprise Cybersecurity & Threat Defense
+* **Coraza HTTP WAF**: Native Web Application Firewall executing OWASP Core Rule Set v4 rulesets in real time to neutralize SQLi, XSS, RCE, SSRF, and LFI attacks.
+* **CrowdSec LAPI Integration**: Active bouncer (`panel-coraza-bouncer`) pulling community blocklists and enforcing IP bans at the gateway layer.
+* **Interactive 3D Threat Origin Map**: WebGL vector map clustering attack vectors with real-time ASN, country, and city geolocation intelligence.
+* **Per-Domain Virtual Host WAF Rules**: Configure WAF enforcement per domain (`Enforce`, `Audit`, `Bypass`) and manage false-positive rule exclusions (`panel_waf_exempt`) with automatic configuration rollbacks.
+* **Container Network Isolation**: Strict container network policies (e.g. `enable_icc=false` bridge networks) preventing untrusted workloads from communicating with host loopback or internal services.
 
-### 💾 7. S3 Cloud Backups & Automation
-* **S3-Compatible Cloud Backups**: Encrypted AES-256-GCM backups to AWS S3, Cloudflare R2, MinIO, or Backblaze B2.
-* **Crontab Task Scheduler**: Visual cron expression editor with execution logging and failure notifications.
-* **Multi-Channel Alerts**: Webhook alerts delivered to Telegram, Discord, Slack, and email.
+### 🤖 2. Autonomous AI DevOps & Model Context Protocol (MCP)
+* **43 Production-Ready MCP Tools**: Full operational surface for AI clients (ChatGPT, Claude Code, Cursor, Windsurf, Antigravity) to develop, build, test, deploy, and monitor servers without unrestricted shell exposure.
+* **OAuth 2.0 with PKCE & Streamable HTTP**: Industry-standard, secure OAuth 2.0 authorization code flow with S256 PKCE protection and cryptographic token rotation.
+* **Transactional File Safety**: Every file edit (`panel_file_edit`) executes preflight syntax checks, atomic write-and-replace, and automatic rollback upon validation failure.
+* **Graphify Knowledge Graph**: Semantic AST graph index optimizing repository navigation for AI models, cutting token consumption by **35.4x–77.8x**.
+
+### 📢 3. Next-Gen Incident Notification & Alert Command Center
+* **Unified Multi-Channel Dispatcher**: Native webhook dispatchers for **Telegram**, **Discord**, **Slack**, and **Custom Generic Webhooks**.
+* **Cryptographic HMAC Security**: Custom webhooks sign alert payloads with `X-Panel-Signature-256` HMAC-SHA256 headers for zero-trust receiver verification.
+* **Granular Severity Filtering**: Filter alert triggers by severity:
+  * 🔴 **CRITICAL**: System outages, container crashes, disk exhaustion (>90%), WAF attack spikes.
+  * 🟡 **WARNING**: High CPU/RAM utilization (>85%), backup retries, SSL renewal warnings.
+  * 🔵 **INFO**: Successful deployments, automated service restarts, system maintenance.
+* **Live Message Previews**: Real-time interactive UI previews showing exactly how formatted alert cards appear in Telegram MarkdownV2 and Discord Rich Embeds.
+* **1-Click Broadcast Diagnostics**: Instant test broadcast button to verify all configured notification channels simultaneously.
+
+### 🐳 4. Docker Orchestration & 1-Click App Catalog
+* **Full Container Lifecycle**: Start, stop, restart, pause, inspect, and stream live container logs.
+* **Visual Compose Studio**: Multi-file Docker Compose workspace with syntax linting, YAML validation, environment variable management, and drift detection.
+* **Curated 1-Click App Store**: Instant zero-configuration deployments for PostgreSQL, MySQL, Redis, Nginx, SearXNG, n8n, Jellyfin, WordPress, Nextcloud, and more.
+* **Private Image Registries**: Native authentication for Docker Hub, GitHub Container Registry (`ghcr.io`), AWS ECR, and private registries.
+
+### 🌐 5. Modern Web Engine & Containerized Sandboxes
+* **Multi-Language Hosting**: Deploy Node.js, Python WSGI/ASGI, PHP-FPM, and static sites with zero manual configuration.
+* **Host vs. Sandbox Runtime Isolation**: The panel runs securely on host Node.js v24 LTS while user applications run in isolated, rootless container sandboxes (`node:24-bookworm-slim`), completely isolating user code from the host filesystem.
+* **Atomic Zero-Downtime Deployments**: Symlink-based atomic switching with automated rollback on healthcheck failure.
+* **Automated SSL/TLS (ACME)**: Cloudflare Edge SSL termination or automated Let's Encrypt / ZeroSSL certificate issuance with automatic 60-day renewal.
+
+### 📊 6. Observability & Autonomous Self-Healing
+* **Grafana 11 & Prometheus**: Embedded dashboards (`CyberPross Server Overview` and `Security Center`) pre-provisioned out of the box.
+* **Adaptive Low-Load Polling**: Intelligent telemetry scraping (15s, 30s, 60s intervals) minimizing resource overhead on low-spec VPS hosts.
+* **Autonomous Health Supervisor**: Continuously checks systemd services, Docker containers, disk inodes, and HTTP endpoints with automated restart policies and 15-minute cooldown safety caps.
+
+---
+
+## 🛠️ The 43 Production MCP Tools
+
+CP-Panel exposes **43 purpose-built MCP tools** divided into 7 functional domains, enabling AI agents to act as trusted, autonomous DevOps copilots:
+
+| Domain | Tools | Description |
+| :--- | :--- | :--- |
+| **System & Daemon Control** | `panel_systemd`, `panel_nginx`, `panel_docker`, `panel_compose`, `panel_cloudflare`, `panel_coraza`, `panel_crowdsec` | Supervised management of systemd units, Nginx vhosts, Docker containers, Compose stacks, Cloudflare Tunnel, Coraza WAF, and CrowdSec LAPI. |
+| **Developer & Sysadmin Tools** *(NEW)* | `panel_apt`, `panel_git`, `panel_docker_build`, `panel_test_runner` | Safe APT package management (search, info, simulation `-s`, upgrade), Git repository lifecycle (clone, pull, status, diff, branch), Docker image building with custom build-args, and isolated rootless test execution (`--network none`). |
+| **Security & Network Audit** *(NEW)* | `panel_security_inspect`, `panel_network_inspect`, `panel_waf_exempt` | Structured read-only inspection of Coraza WAF rulesets, CrowdSec decisions & active bouncers, Suricata alerts, active listening sockets (`ss -tulpn`), UFW rules, and Cloudflare ingress routes. |
+| **Web Hosting & Deployments** | `panel_static_preview`, `panel_static_deploy`, `panel_proxy_create`, `panel_website_import`, `panel_ssl_acme` | Preview directories, deploy static sites with atomic symlink swaps, configure reverse proxies, import multi-runtime websites, and automate ACME SSL issuance. |
+| **Transactional File Studio** | `panel_file_upload`, `panel_file_owner`, `panel_file_permissions`, `panel_file_read`, `panel_file_edit`, `panel_file_restore`, `panel_transactions` | Atomic file operations up to 1 MiB with preflight validation, path traversal guards, private transactional snapshots, and instant rollback. |
+| **Durable Task Execution** | `panel_exec`, `panel_operations`, `panel_operation`, `panel_operation_logs`, `panel_discover`, `panel_read`, `panel_manage`, `panel_command` | Execute root-capable background jobs through the privileged agent socket with durable operation tracking, signal monitoring, and chunked log streaming. |
+| **Infrastructure & Alerts** | `panel_app_catalog`, `panel_app_deploy`, `panel_backup_cloud`, `panel_cron_manage`, `panel_health_policy`, `panel_health`, `panel_grafana`, `panel_graph`, `panel_notification_test` | 1-click Docker app deployments, S3 cloud backups (AWS S3, R2, MinIO), cron scheduling, autonomous self-healing, Grafana dashboards, Graphify knowledge graph queries, and multi-channel incident notifications. |
+
+### Connecting External AI Clients to CP-Panel
+
+#### 1. ChatGPT / OpenAI Codex / Custom GPTs
+In your ChatGPT Custom GPT or Action configuration, provide your MCP endpoint URL:
+```text
+https://cyber.cyberpross.cc/mcp
+```
+Choose **OAuth 2.0** authentication with Authorization Code Flow (`PKCE`). CP-Panel handles the OAuth handshake and token management automatically.
+
+#### 2. Claude Desktop / Claude Code
+Add CP-Panel to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "cp-panel": {
+      "url": "https://cyber.cyberpross.cc/mcp"
+    }
+  }
+}
+```
+
+#### 3. Cursor / Windsurf / Antigravity IDE
+Add the remote MCP server URL in **Settings → Features → MCP Servers**:
+* **Name**: `CP-Panel`
+* **Type**: `SSE / Streamable HTTP`
+* **URL**: `https://cyber.cyberpross.cc/mcp`
 
 ---
 
@@ -82,7 +173,7 @@ Traditional web hosting control panels (such as **cPanel**, **Plesk**, **1Panel*
 ### System Requirements
 * **Operating System**: Ubuntu 24.04 LTS / 22.04 LTS or Debian 12 / 13 (x86_64 / arm64)
 * **Hardware**: Minimum 1 vCPU, 1 GB RAM, 10 GB Disk space
-* **Dependencies**: `curl`, `systemd`
+* **System Utilities**: `curl`, `systemd`
 
 ### 1-Line Automated Installation
 Run the official CyberPross universal installer:
@@ -92,20 +183,22 @@ curl -fsSL https://raw.githubusercontent.com/nitishk1-hub/CP-Panel/main/install.
 ```
 
 The installer will:
-1. Validate system prerequisites and dependencies.
-2. Install Node.js (v24 LTS) and Docker engine (if not present).
-3. Download and cryptographically verify the signed CP-Panel release.
-4. Configure systemd services (`server-panel.service` and `server-panel-agent.service`).
-5. Generate an initial administrator username, password, and emergency recovery code.
+1. Validate system prerequisites and required packages.
+2. Install Node.js (v24 LTS) and Docker Engine (if not already installed).
+3. Pre-cache the isolated website container sandbox (`node:24-bookworm-slim`).
+4. Download and cryptographically verify the release using native **Ed25519 signatures**.
+5. Configure systemd services (`server-panel.service` and `server-panel-agent.service`).
+6. Secure private recovery credentials in `/etc/server-panel/recovery/` with mode `0700`.
+7. Output initial administrator credentials and the emergency recovery code.
 
 ---
 
 ### Manual Installation & Development Setup
 
-If you prefer installing from source or contributing to development:
+To build and run CP-Panel from source:
 
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/nitishk1-hub/CP-Panel.git
 cd CP-Panel
 
@@ -113,13 +206,13 @@ cd CP-Panel
 npm ci
 npm run build:tools
 
-# 3. Run automated unit test suite (All tests passing)
+# 3. Run full automated test suite (16/16 tests passing)
 npm test
 
-# 4. Initialize first-run administrator credentials
+# 4. Initialize administrator credentials
 npm run first-run
 
-# 5. Start the development server
+# 5. Start panel daemon
 npm start
 ```
 
@@ -128,87 +221,63 @@ Access the panel in your browser at:
 
 ---
 
-## 🔒 Zero-Trust Architecture
-
-```
-                                  [ INTERNET ]
-                                       │
-                         Cloudflare Edge (WAF, DDoS, SSL)
-                                       │
-                      Cloudflare Tunnel (Encrypted Wire)
-                                       │
-┌────────────────────────────── SERVER / HOST ──────────────────────────────┐
-│                                                                           │
-│  [ cloudflared ] (Loopback connector · Zero open firewall ports)          │
-│        │                                                                  │
-│        ▼ (127.0.0.1:19180)                                                │
-│  [ Coraza WAF Gateway ] (OWASP Core Rule Set v4 inspection)               │
-│        │                                                                  │
-│        ▼ (127.0.0.1:8787)                                                 │
-│  [ CP-Panel Core Engine ] ──► [ Privileged Agent (Unix Domain Socket) ]   │
-│        │                                   │                              │
-│        ├─► Docker Compose & Containers     ├─► Systemd Service Control    │
-│        ├─► Web Engine (Node, Python, PHP)  ├─► File System (Atomic Ops)   │
-│        ├─► Embedded Grafana 11 Dashboard   ├─► Suricata IDS Inspection    │
-│        └─► OpenRouter AI / MCP Server      └─► CrowdSec LAPI Threat Mesh  │
-│                                                                           │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
 ## 📚 Documentation
 
-Detailed architectural and administration guides are available in the [`docs/`](docs/) directory:
+Comprehensive architectural and configuration guides:
 
-| Document | Description |
+| Guide | Description |
 | :--- | :--- |
-| [**Installation Guide**](docs/INSTALLATION.md) | Comprehensive installation, upgrade, and dependency guide |
-| [**Panel Access & Tunnels**](docs/PANEL-ACCESS.md) | Configuring Cloudflare Tunnels and remote management |
-| [**WAF & Threat Defense**](docs/WAF-AND-VAULT.md) | Coraza WAF rulesets, CrowdSec LAPI, and Suricata IDS |
-| [**Grafana Observability**](docs/GRAFANA-PANEL-ARCHITECTURE.md) | Embedded Grafana dashboards, datasources, and Prometheus |
-| [**AI Connections & MCP**](docs/AI-CONNECTIONS.md) | OpenRouter AI setup, Model Context Protocol tools, and Graphify |
-| [**Native Web Engine**](docs/NATIVE-WEB-ENGINE.md) | Reverse proxy configuration and runtime environments |
-| [**Cloud Backups & S3**](docs/BACKUP-AND-RECOVERY.md) | Encrypted S3 snapshots and disaster recovery procedures |
-| [**Release Verification**](docs/RELEASE-PROCESS.md) | Cryptographic Ed25519 signature verification |
+| [**Installation Guide**](docs/INSTALLATION.md) | Universal installer, offline setup, and upgrade procedures |
+| [**Panel Access & Tunnels**](docs/PANEL-ACCESS.md) | Zero-trust Cloudflare Tunnel setup and loopback routing |
+| [**WAF & Threat Defense**](docs/WAF-AND-VAULT.md) | Coraza WAF, OWASP CRS v4 rulesets, and CrowdSec bouncer |
+| [**AI Connections & MCP**](docs/AI-CONNECTIONS.md) | Model Context Protocol setup, OAuth 2.0 PKCE, and tool reference |
+| [**Grafana Observability**](docs/GRAFANA-PANEL-ARCHITECTURE.md) | Embedded Grafana 11 dashboards, datasources, and Prometheus |
+| [**Native Web Engine**](docs/NATIVE-WEB-ENGINE.md) | Multi-runtime hosting, reverse proxies, and container sandboxes |
+| [**Cloud Backups & S3**](docs/BACKUP-AND-RECOVERY.md) | Encrypted S3 snapshots and disaster recovery workflows |
+| [**Release Verification**](docs/RELEASE-PROCESS.md) | Ed25519 signature generation and checksum validation |
 
 ---
 
 ## ❓ Frequently Asked Questions (FAQ)
 
 <details>
-<summary><b>1. How is CP-Panel different from cPanel, aaPanel, or 1Panel?</b></summary>
+<summary><b>1. How does CP-Panel compare to cPanel, aaPanel, or 1Panel?</b></summary>
 <br>
-Unlike conventional hosting panels that rely on exposing unencrypted management ports to the internet, CP-Panel is strictly <b>Zero-Trust and Cloudflare Tunnel-first</b>. It requires zero open firewall ports, includes enterprise-grade security tools (Coraza WAF and CrowdSec) out of the box, and provides native AI copilot tools through the Model Context Protocol (MCP).
+Unlike traditional panels that expose management ports (2083, 8888, 8090) and raw web ports (80, 443) directly to the public internet, CP-Panel is strictly <b>Zero-Trust and Cloudflare Tunnel-first</b>. It requires <b>zero open inbound firewall ports</b>, includes enterprise-grade Coraza WAF (CRS v4) and CrowdSec out of the box, and provides <b>43 production MCP tools</b> enabling external AI agents to manage servers safely.
 </details>
 
 <details>
-<summary><b>2. Do I need to open port 80 or 443 on my firewall?</b></summary>
+<summary><b>2. Why do I not need to open port 80 or 443 on my firewall?</b></summary>
 <br>
-<b>No.</b> CP-Panel works natively with Cloudflare Tunnels (<code>cloudflared</code>). Outbound encrypted tunnels connect your server to Cloudflare's edge network, meaning you can block all inbound ports on your firewall (including 80, 443, and 8787) while maintaining full HTTPS public access.
+CP-Panel routes all ingress traffic through Cloudflare Tunnels (<code>cloudflared</code>). The tunnel initiates outbound encrypted connections to Cloudflare's edge network. When visitors access your site, Cloudflare routes traffic securely down the tunnel to loopback (<code>127.0.0.1</code>), through Coraza WAF, and into your application. All public inbound firewall ports (including 80, 443, 2087, and 8787) can remain completely closed, preventing port scanning and direct origin attacks.
 </details>
 
 <details>
-<summary><b>3. Which AI models and providers are supported?</b></summary>
+<summary><b>3. Is Node.js installed on the host or inside a container?</b></summary>
 <br>
-CP-Panel natively integrates with <b>OpenRouter AI</b>, giving you access to 200+ models including Claude 3.5 Sonnet, DeepSeek R1, OpenAI GPT-4o, and Meta Llama 3.3. It also supports local offline Graphify AI graphs without external API requirements.
+Both! CP-Panel's control plane runs on the host using <b>Node.js v24 LTS</b>, while user websites and applications run inside <b>isolated container sandboxes</b> (such as <code>node:24-bookworm-slim</code>). This architecture prevents customer web applications from interfering with host processes, systemd services, or panel files.
 </details>
 
 <details>
-<summary><b>4. Is CP-Panel completely free and open-source?</b></summary>
+<summary><b>4. How does MCP authentication work?</b></summary>
 <br>
-<b>Yes.</b> CP-Panel is released under the permissive <b>Apache License 2.0</b>. There are no enterprise tiers, no locked features, and no subscription fees.
+CP-Panel implements the official Model Context Protocol specification with <b>OAuth 2.0 and PKCE (RFC 7636)</b> over Streamable HTTP. Clients authenticate against standard OAuth endpoints (<code>/.well-known/oauth-authorization-server</code>, <code>/authorize</code>, <code>/token</code>) with short-lived tokens, granular scopes (<code>read</code>, <code>manage</code>, <code>command</code>), and token rotation.
+</details>
+
+<details>
+<summary><b>5. Is CP-Panel completely free and open-source?</b></summary>
+<br>
+<b>Yes.</b> CP-Panel is licensed under the permissive <b>Apache License 2.0</b>. There are no enterprise paywalls, no artificial container limits, and no telemetry tracking.
 </details>
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from the open-source community! Whether you are reporting a bug, improving documentation, or submitting a feature pull request:
-
-1. Read our [**Contributing Guide**](CONTRIBUTING.md).
+We welcome contributions from the open-source community!
+1. Read the [**Contributing Guide**](CONTRIBUTING.md).
 2. Adhere to our [**Code of Conduct**](CODE_OF_CONDUCT.md).
-3. Report security vulnerabilities responsibly per [**SECURITY.md**](SECURITY.md).
+3. Report security vulnerabilities per [**SECURITY.md**](SECURITY.md).
 
 ---
 
