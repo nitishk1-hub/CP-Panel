@@ -10,7 +10,7 @@
 [![OS: Ubuntu & Debian](https://img.shields.io/badge/OS-Ubuntu_%7C_Debian-e95420?style=for-the-badge&logo=ubuntu&logoColor=white)](docs/INSTALLATION.md)
 [![Security: Coraza WAF + CrowdSec](https://img.shields.io/badge/Security-Coraza_WAF_%2B_CrowdSec-dc2626?style=for-the-badge&logo=owasp&logoColor=white)](docs/WAF-AND-VAULT.md)
 [![Ingress: Cloudflare Zero--Trust](https://img.shields.io/badge/Ingress-Cloudflare_Tunnel_%7C_Direct_DNS-f38020?style=for-the-badge&logo=cloudflare&logoColor=white)](docs/PANEL-ACCESS.md)
-[![AI Control: 44 MCP Tools](https://img.shields.io/badge/AI_DevOps-44_MCP_Tools_%2B_OAuth2-0284c7?style=for-the-badge&logo=openai&logoColor=white)](docs/AI-CONNECTIONS.md)
+[![AI Control: 54 MCP Tools](https://img.shields.io/badge/AI_DevOps-54_MCP_Tools_%2B_OAuth2-0284c7?style=for-the-badge&logo=openai&logoColor=white)](docs/AI-CONNECTIONS.md)
 [![Observability: Grafana 11 + Prometheus](https://img.shields.io/badge/Observability-Grafana_11_%2B_Prometheus-f97316?style=for-the-badge&logo=grafana&logoColor=white)](docs/GRAFANA-PANEL-ARCHITECTURE.md)
 
 <p align="center">
@@ -18,7 +18,7 @@
   Built from the ground up for <b>Zero-Trust Privacy (0 Open Inbound Ports)</b>, <b>Inline Coraza WAF Defense (OWASP CRS v4)</b>, <b>Dynamic Cloudflare DNS &amp; 1-Click Email Provisioning</b>, <b>Isolated Docker Orchestration</b>, and <b>Autonomous AI DevOps via Model Context Protocol (MCP)</b>.
 </p>
 
-[Quick Start](#-quick-start--os-implementation-guide) • [Why CP-Panel?](#-why-cp-panel) • [OS Implementation Guide](#-os-implementation-guide) • [Dual Ingress Modes](#-dual-network-ingress-architecture) • [Core Features](#-core-features--capabilities) • [44 MCP Tools](#-the-44-production-mcp-tools) • [AI Client Integration](#-connecting-external-ai-clients-to-cp-panel) • [Documentation](#-documentation) • [FAQ](#-frequently-asked-questions-faq) • [License](#-license)
+[Quick Start](#-quick-start--os-implementation-guide) • [Why CP-Panel?](#-why-cp-panel) • [OS Implementation Guide](#-os-implementation-guide) • [Dual Ingress Modes](#-dual-network-ingress-architecture) • [Core Features](#-core-features--capabilities) • [54 MCP Tools](#-the-54-production-mcp-tools) • [AI Client Integration](#-connecting-external-ai-clients-to-cp-panel) • [Documentation](#-documentation) • [FAQ](#-frequently-asked-questions-faq) • [License](#-license)
 
 </div>
 
@@ -37,7 +37,7 @@ Traditional web hosting control panels (such as **cPanel**, **Plesk**, **1Panel*
 | **Email DNS Provisioning** | Manual, error-prone MX, SPF, DMARC, DKIM records | **1-Click Full Email DNS Suite** (Automates `mail.`, MX, SPF, DMARC, DKIM) |
 | **Web Application Firewall** | Basic ModSecurity or expensive commercial add-ons | **Native Coraza HTTP WAF** with OWASP Core Rule Set (CRS v4) built-in |
 | **Threat Mesh &amp; Reputation**| Local-only Fail2ban with zero global context | **CrowdSec LAPI** distributed community threat intelligence mesh |
-| **AI DevOps &amp; Copilots** | None, or basic text generation prompts | **44 Production MCP Tools** with OAuth 2.0 PKCE &amp; Streamable HTTP |
+| **AI DevOps &amp; Copilots** | None, or basic text generation prompts | **54 Production MCP Tools** with OAuth 2.0 PKCE &amp; Streamable HTTP |
 | **Runtime Isolation** | Shared host root/user processes | **Containerized Sandbox Runtimes** (`node:24-bookworm-slim`, PHP, Python) |
 | **Incident Notifications** | Simple plain-text emails | **Multi-Channel Dispatcher** (Telegram, Discord, Slack, HMAC Webhooks) |
 | **Observability &amp; Telemetry** | Rudimentary charts or paid third-party add-ons | **Embedded Grafana 11 &amp; Prometheus** with low-overhead sampling |
@@ -237,7 +237,7 @@ If your architecture requires direct server IP connections rather than tunneling
 * **Live SSE Telemetry Stream**: Real-time event streaming (`/api/security-center/stream`) and automatic 12-second polling to update KPI cards without screen flicker.
 
 ### 🤖 2. Autonomous AI DevOps & Model Context Protocol (MCP)
-* **44 Production-Ready MCP Tools**: Granular tools allowing AI agents (ChatGPT, Claude Code, Cursor, Windsurf, Antigravity) to inspect, manage, build, test, and repair servers without raw root shell exposure.
+* **54 Production-Ready MCP Tools**: Granular tools allowing AI agents (ChatGPT, Claude Code, Cursor, Windsurf, Antigravity) to inspect, manage, build, test, and repair servers without raw root shell exposure.
 * **OAuth 2.0 with PKCE**: Strict cryptographic authentication enforcing token rotation, short-lived bearer tokens, and intent validation (`read`, `manage`, `command`).
 * **Transactional File Safety**: File edits through `panel_file_edit` validate syntax before committing, create atomic backups, and automatically roll back on failure.
 * **Graphify Knowledge Graph**: Semantic AST code graph indexing that slashes LLM context token consumption by **35x–77x**.
@@ -263,19 +263,20 @@ If your architecture requires direct server IP connections rather than tunneling
 
 ---
 
-## 🛠️ The 44 Production MCP Tools
+## 🛠️ The 54 Production MCP Tools
 
-CP-Panel provides **44 purpose-built Model Context Protocol (MCP) tools** divided into 7 functional domains:
+CP-Panel provides **54 purpose-built Model Context Protocol (MCP) tools** divided into 8 functional domains:
 
 | Domain | Tools | Scope | Confirmation | Description |
 | :--- | :--- | :---: | :---: | :--- |
+| **Unified Deployment & Projects** | `panel_deploy`, `panel_project_edit`, `panel_project_read`, `panel_app_inventory` | `read` / `manage` | Deployments & edits | Unified Deployment Controller (Preview → Build → Test → Deploy → Verify → Rollback), multi-file transactional project editing, and end-to-end domain-to-container inventory. |
 | **System & Daemon Control** | `panel_systemd`, `panel_nginx`, `panel_docker`, `panel_compose`, `panel_cloudflare`, `panel_coraza`, `panel_crowdsec` | `manage` | Yes | Supervised lifecycle control for systemd units, Nginx virtual hosts, Docker containers, Compose stacks, Cloudflare Tunnel, and Coraza WAF. |
-| **Developer & Sysadmin Tools** | `panel_apt`, `panel_git`, `panel_docker_build`, `panel_test_runner`, `panel_cloudflare_dns` | `manage` | Mutating actions | Safe APT package management (search, info, simulate, upgrade), Git lifecycle (clone, pull, status, diff, branch), Docker image building, isolated test running (`--network none`), and Cloudflare DNS automation. |
-| **Security & Network Audit** | `panel_security_inspect`, `panel_network_inspect`, `panel_waf_exempt` | `read` / `manage` | Exemptions only | Structured telemetry inspection of Coraza WAF rulesets, CrowdSec decisions, Suricata IDS alerts, listening sockets (`ss -tulpn`), UFW rules, and per-domain WAF rule exemptions. |
-| **Web Hosting & Deployments** | `panel_static_preview`, `panel_static_deploy`, `panel_proxy_create`, `panel_website_import`, `panel_ssl_acme` | `manage` | Yes | Static directory previews, atomic symlink deployments, reverse proxy creation, multi-runtime website imports, and ACME SSL issuance. |
-| **Transactional File Studio** | `panel_file_upload`, `panel_file_owner`, `panel_file_permissions`, `panel_file_read`, `panel_file_edit`, `panel_file_restore`, `panel_transactions` | `read` / `manage` | Edits & permissions | Atomic file operations up to 1 MiB with preflight validation, path traversal guards, private snapshots, and instant rollback. |
-| **Durable Task Execution** | `panel_exec`, `panel_operations`, `panel_operation`, `panel_operation_logs`, `panel_discover`, `panel_read`, `panel_manage`, `panel_command` | `command` | Yes | Execute background jobs through the privileged agent socket with durable task tracking, exit code capture, and streaming logs. |
-| **Infrastructure & Alerts** | `panel_app_catalog`, `panel_app_deploy`, `panel_backup_cloud`, `panel_cron_manage`, `panel_health_policy`, `panel_health`, `panel_grafana`, `panel_graph`, `panel_notification_test` | `read` / `manage` | Deployments & backups | 1-click Docker app deployments, S3 cloud backups (AWS S3, R2, MinIO), cron scheduling, self-healing policies, Grafana metrics, and multi-channel incident dispatches. |
+| **Developer & Sysadmin Tools** | `panel_apt`, `panel_git`, `panel_docker_build`, `panel_test_runner`, `panel_cloudflare_dns` | `command` / `manage` | Mutating actions | Structured APT change-impact previews (dependency, removal & reboot reporting), Git auto-discovery & workspace selection, BuildKit-isolated Docker image building, and sandboxed test execution. |
+| **Security & Threat Audit** | `panel_security_inspect`, `panel_network_inspect`, `panel_docker_security_inspect`, `panel_security_scan`, `panel_waf_verify`, `panel_waf_exempt` | `read` / `manage` | Exemptions only | Comprehensive audits: Docker privileges & socket exposure, Gitleaks-equivalent secret detection, dependency audits, per-domain WAF enforcement evidence, and listening socket telemetry. |
+| **Observability & Logs** | `panel_logs_correlate`, `panel_grafana`, `panel_graph`, `panel_notification_test` | `read` / `manage` | Mutating actions | Correlated search across Docker, Nginx, Coraza, CrowdSec, and systemd with secret redaction, Graphify context digests (35x–77x token reduction), and Grafana metrics. |
+| **Secrets & Disaster Recovery** | `panel_secrets`, `panel_backup`, `panel_backup_cloud` | `manage` | Yes | Scoped secret management (list with masking, get, set, rotate, delete) in 0600 storage, backup archive verification (AES-256-GCM), and isolated dry-run restore tests. |
+| **Web Hosting & SSL** | `panel_static_preview`, `panel_static_deploy`, `panel_proxy_create`, `panel_website_import`, `panel_ssl_acme` | `manage` | Yes | Static directory previews, atomic symlink deployments, reverse proxy creation, multi-runtime website imports, and ACME SSL issuance. |
+| **Transactional File Studio** | `panel_file_upload`, `panel_file_owner`, `panel_file_permissions`, `panel_file_read`, `panel_file_edit`, `panel_file_restore`, `panel_transactions`, `panel_exec`, `panel_operations`, `panel_operation`, `panel_operation_logs`, `panel_discover`, `panel_read`, `panel_manage`, `panel_command`, `panel_app_catalog`, `panel_app_deploy`, `panel_cron_manage`, `panel_health_policy`, `panel_health` | `read` / `manage` / `command` | Edits & commands | Atomic file operations up to 1 MiB, durable background jobs, streaming logs, 1-click open-source app deployments, crontabs, and self-healing policies. |
 
 ---
 
