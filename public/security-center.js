@@ -70,6 +70,25 @@ function renderAccessTbody(decisions,recentBlocked,allowlist){
  return rows.join('');
 }
 
+function securityNavTabs(){
+  const active=typeof securitySection==='string'?securitySection:'map';
+  return `<div class="tabs security-tabs" role="tablist" aria-label="Security Center sections">
+    <button class="tab ${active==='map'?'active':''}" data-security-subtab="map" type="button" role="tab" aria-selected="${active==='map'}">${icon('globe')} Threat Intelligence Map</button>
+    <button class="tab ${active==='access'?'active':''}" data-security-subtab="access" type="button" role="tab" aria-selected="${active==='access'}">${icon('shield')} Access Control &amp; IP Reputation</button>
+    <button class="tab ${active==='domains'?'active':''}" data-security-subtab="domains" type="button" role="tab" aria-selected="${active==='domains'}">${icon('network')} Domain WAF Policies</button>
+    <button class="tab ${active==='maintenance'?'active':''}" data-security-subtab="maintenance" type="button" role="tab" aria-selected="${active==='maintenance'}">${icon('server')} Security Engines &amp; Signatures</button>
+  </div>`;
+}
+
+function bindSecuritySubnav(){
+  $$('[data-security-subtab]').forEach(b=>{
+    b.onclick=action(async()=>{
+      securitySection=b.dataset.securitySubtab;
+      route('waf');
+    });
+  });
+}
+
 async function securityCenterPage(){
  if(me.role!=='admin'){content.innerHTML=empty('Administrator access required','Security controls require an administrator account.','lock');return;}
  disposeSecurityCenter();
@@ -93,6 +112,7 @@ async function securityCenterPage(){
   :pill('Protection Bypassed','red');
 
  content.innerHTML=`
+  ${securityNavTabs()}
   <!-- Enterprise Cybersecurity Posture Banner -->
   <div class="security-hero-banner">
    <div class="security-hero-status">
@@ -484,6 +504,7 @@ async function securityCenterPage(){
    if(btn1)btn1.disabled=false;if(btn2)btn2.disabled=false;
   }
  };
+ bindSecuritySubnav();
  bind('security-map-refresh',triggerRefresh);
  bind('security-map-refresh-inner',triggerRefresh);
 

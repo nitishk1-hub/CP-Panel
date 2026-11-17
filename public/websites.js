@@ -7,12 +7,53 @@ function toggleSidebar(){if(matchMedia('(max-width:700px)').matches)document.bod
 const websiteType=t=>({static:'Static',node:'Node.js',python:'Python',php:'PHP',proxy:'Reverse proxy'}[t]||t);
 const websiteState=s=>s.archived?pill('Archived'):s.state==='published'?pill(['static','proxy'].includes(s.type)?'Published':s.runtimeState==='running'?'Running':s.runtimeState||'Published',['static','proxy'].includes(s.type)||s.runtimeState==='running'?'green':'amber'):pill(s.state==='draft'?'Draft':'Stopped');
 
-async function websitesPage(id){if(me.role!=='admin'){content.innerHTML=empty('Administrator access required','Website management requires an administrator account.','lock');return;}websiteCurrent=null;const [d,engineStatus]=await Promise.all([api('/api/websites'),api('/api/web-engine')]);if(id!==generation)return;d.webEngine=engineStatus;websitesInventory=d;content.innerHTML=`<div id="websites-content"></div>`;if(websiteTab==='runtimes')renderWebsiteRuntimes(d);else if(websiteTab==='engine')renderWebEngine(d);else renderWebsiteList(d);}
+function websiteNavTabs(){
+  const current=websiteTab!=='sites'?websiteTab:websiteCategory;
+  return `<div class="tabs website-tabs" role="tablist" aria-label="Website categories & runtimes">
+    <button class="tab ${current==='all'?'active':''}" data-website-subtab="all" data-website-mode="sites" type="button" role="tab" aria-selected="${current==='all'}">${icon('globe')} All websites</button>
+    <button class="tab ${current==='proxy'?'active':''}" data-website-subtab="proxy" data-website-mode="sites" type="button" role="tab" aria-selected="${current==='proxy'}">${icon('network')} Reverse proxy</button>
+    <button class="tab ${current==='static'?'active':''}" data-website-subtab="static" data-website-mode="sites" type="button" role="tab" aria-selected="${current==='static'}">${icon('globe')} Static websites</button>
+    <button class="tab ${current==='node'?'active':''}" data-website-subtab="node" data-website-mode="sites" type="button" role="tab" aria-selected="${current==='node'}">${icon('file')} Node.js</button>
+    <button class="tab ${current==='php'?'active':''}" data-website-subtab="php" data-website-mode="sites" type="button" role="tab" aria-selected="${current==='php'}">${icon('file')} PHP</button>
+    <button class="tab ${current==='python'?'active':''}" data-website-subtab="python" data-website-mode="sites" type="button" role="tab" aria-selected="${current==='python'}">${icon('file')} Python</button>
+    <button class="tab ${current==='runtimes'?'active':''}" data-website-subtab="runtimes" data-website-mode="runtimes" type="button" role="tab" aria-selected="${current==='runtimes'}">${icon('cpu')} Runtimes</button>
+    <button class="tab ${current==='engine'?'active':''}" data-website-subtab="engine" data-website-mode="engine" type="button" role="tab" aria-selected="${current==='engine'}">${icon('server')} Web engine</button>
+  </div>`;
+}
+
+function bindWebsiteSubnav(){
+  $$('[data-website-subtab]').forEach(b=>{
+    b.onclick=action(async()=>{
+      const mode=b.dataset.websiteMode;
+      const sub=b.dataset.websiteSubtab;
+      if(mode==='sites'){websiteTab='sites';websiteCategory=sub;}
+      else{websiteTab=sub;websiteCategory='all';}
+      route('websites');
+    });
+  });
+}
+
+async function websitesPage(id){
+  if(me.role!=='admin'){
+    content.innerHTML=empty('Administrator access required','Website management requires an administrator account.','lock');
+    return;
+  }
+  websiteCurrent=null;
+  const [d,engineStatus]=await Promise.all([api('/api/websites'),api('/api/web-engine')]);
+  if(id!==generation)return;
+  d.webEngine=engineStatus;
+  websitesInventory=d;
+  content.innerHTML=`${websiteNavTabs()}<div id="websites-content"></div>`;
+  bindWebsiteSubnav();
+  if(websiteTab==='runtimes')renderWebsiteRuntimes(d);
+  else if(websiteTab==='engine')renderWebEngine(d);
+  else renderWebsiteList(d);
+}
 function renderWebsiteList(d){const target=$('#websites-content');const managed=d.sites;target.innerHTML=`${!d.canManage?notice('Website changes require the administrator service. Complete setup under System.','warning'):''}${!d.engine?`<div class="access-notice"><div><strong>Web engine not installed</strong><p>Install native Nginx automatically, or review the package plan and recovery settings first. Existing applications are retained.</p></div>${button('website-engine-setup','Set up web engine','plus','primary')}</div>`:''}<div class="system-status-strip"><div><span>Web engine</span><strong>${d.engine?'OpenResty / Nginx':'Not installed'}</strong></div><div><span>Total sites</span><strong>${managed.filter(s=>!s.archived).length+d.external.length}</strong></div><div><span>Enabled routes</span><strong>${managed.filter(s=>!s.archived&&s.state==='published').length+d.external.filter(s=>s.enabled!==false).length}</strong></div><div><span>Application runtimes</span><strong>${['node','python','php'].filter(t=>d.runtimes[t]?.installed).length} installed · optional</strong></div></div><div class="card management-card"><div class="toolbar"><div class="section-table-heading"><h2>Configured virtual hosts &amp; routes</h2></div><div class="table-toolbar-actions"><input id="website-search" class="table-filter" type="search" aria-label="Filter websites" placeholder="Filter domains…"><select id="website-filter" class="filters-select" aria-label="Website filter"><option value="all">All websites</option><option value="panel">Panel managed</option><option value="existing">Existing</option><option value="archived">Archived</option></select>${button('website-create','Create website','plus','primary')}</div></div><div class="table-wrap"><table class="management-table"><thead><tr><th>WEBSITE / DOMAINS</th><th>TYPE</th><th>STATUS</th><th>ORIGIN TRANSPORT</th><th class="actions-column">ACTIONS</th></tr></thead><tbody id="website-rows"></tbody></table></div><div class="table-footer"><span id="website-count"></span><span>${d.engine?'Reusing '+esc(d.engine.name):'No compatible web engine detected'}</span></div></div>`;$('#website-create').disabled=!d.engine||!d.canManage;bind('website-create',createWebsiteDialog);bind('website-engine-setup',async()=>{websiteTab='engine';await websitesPage(generation);});$('#website-search').oninput=draw;$('#website-filter').onchange=draw;
  function draw(){const filter=$('#website-filter').value,q=$('#website-search').value.toLowerCase();let rows=[...managed,...d.external];rows=rows.filter(s=>{if(websiteCategory==='all')return true;if(websiteCategory==='python')return s.isAlgo||(s.type||'').toLowerCase().includes('python')||(s.displayType||'').toLowerCase().includes('python')||(s.domains||[]).some(d=>d.includes('algo'));if(websiteCategory==='node')return (s.domains||[]).some(d=>d.includes('cyber.'))||(s.type||'').toLowerCase().includes('node')||(s.displayType||'').toLowerCase().includes('node');if(websiteCategory==='proxy')return s.type==='Reverse proxy'||s.isAlgo||(s.upstreams&&s.upstreams.length)||(s.type||'').includes('Hybrid');if(websiteCategory==='static')return s.type==='Static'||s.type==='static';if(websiteCategory==='php')return (s.type||'').toLowerCase().includes('php');return (s.managed?s.type:({'Static':'static','PHP':'php','Reverse proxy':'proxy'}[s.type]||'proxy'))===websiteCategory;});rows=rows.filter(s=>(filter==='archived'?s.archived:!s.archived)&&(filter!=='panel'||s.managed)&&(filter!=='existing'||!s.managed)&&s.domains.join(' ').toLowerCase().includes(q));$('#website-rows').innerHTML=rows.map((s,i)=>`<tr><td><div class="table-name"><span class="table-icon">${icon('globe')}</span><span><strong>${esc(s.domains[0])}</strong><small>${esc(s.domains.slice(1).join(', ')|| (s.managed?'Panel managed':(s.isAlgo||s.domains[0].includes('algo'))?'Native: openalgo.service':'Managed by existing configuration'))}</small></span></div></td><td>${esc(s.managed?websiteType(s.type):(s.displayType||s.type))}</td><td>${s.managed?websiteState(s):pill(s.enabled===false?'Disabled':(s.isAlgo||s.domains[0].includes('algo'))?'Running (Service)':'Enabled',s.enabled===false?'':'green')}${s.pending&&s.state==='published'?'<small>Unpublished changes</small>':''}</td><td>${pill(s.tls?'HTTPS':d.engine?.listenAddresses?'Local HTTP':'HTTP',s.tls?'green':'')}</td><td class="actions-column"><button class="button secondary small website-manage" data-index="${i}">Manage</button></td></tr>`).join('')||`<tr><td colspan="5">${empty('No websites here',d.engine?'Create a website, upload your code, then publish it.':'Install or configure OpenResty / Nginx to host websites.','globe')}</td></tr>`;$('#website-count').textContent=rows.length+' websites';$$('.website-manage').forEach(b=>b.onclick=action(()=>{const s=rows[Number(b.dataset.index)];return openWebsite(s.id);;}));}draw();}
 function renderWebsiteRuntimes(d){$('#websites-content').innerHTML=`<div class="card management-card"><div class="toolbar"><div><h2>Website Sandbox Runtimes</h2><p class="field-help">Hosted client websites execute inside unprivileged rootless Docker containers for security isolation, distinct from the host panel Node.js runtime.</p></div>${pill(d.docker?'Docker available':'Docker not installed',d.docker?'green':'amber')}</div><div class="table-wrap"><table class="management-table"><thead><tr><th>RUNTIME</th><th>HOST ENVIRONMENT</th><th>WEBSITE SANDBOX</th><th>CONTAINER IMAGE</th><th class="actions-column">ACTION</th></tr></thead><tbody>${Object.entries(d.runtimes).map(([id,r])=>`<tr><td><strong>${esc(r.name)}</strong>${id==='composer'?'<small>Optional PHP dependency manager</small>':''}</td><td>${esc(d.host[id==='python'?'python3':id]||'Not installed on host')}</td><td>${pill(r.installed?'Sandbox ready':'Not pulled',r.installed?'green':'amber')}</td><td><code>${esc(r.image)}</code>${r.digest?`<small title="${esc(r.digest)}">Digest pinned when publishing</small>`:''}</td><td class="actions-column"><button class="button secondary small website-runtime-install" data-runtime="${id}" ${!d.docker||!d.canManage?'disabled':''}>${r.installed?'Pull update':'Pull sandbox'}</button></td></tr>`).join('')}</tbody></table></div><div class="table-footer"><span>Websites run inside isolated unprivileged containers. Existing sites keep their image until republished.</span></div></div>`;$$('.website-runtime-install').forEach(b=>b.onclick=action(async()=>{const r=d.runtimes[b.dataset.runtime];if(await confirmOperation('Install '+r.name+'?',`Pull ${r.image} from its official Docker repository. Existing websites will keep running unchanged.`,'Install runtime'))watch(await post('/api/websites/runtime',{runtime:b.dataset.runtime,confirm:true}),null,()=>websitesPage(generation));}));}
 function createWebsiteDialog(){const d=websitesInventory;openModal('Create website',`<form id="website-create-form" class="modal-body"><div class="form-grid"><label>Website type<select id="website-type" aria-label="Website type"><option value="static">Static HTML / CSS / JavaScript</option><option value="node">Node.js</option><option value="python">Python</option><option value="php">PHP</option><option value="proxy">Reverse proxy</option></select></label><label>HTTP port<input id="website-port" type="number" min="1" max="65535" value="80" required></label><label class="span-2">Domains<textarea id="website-domains" rows="3" placeholder="example.com&#10;www.example.com" required></textarea></label></div><label id="website-upstream-field" hidden>Upstream address<input id="website-upstream" type="url" placeholder="http://127.0.0.1:3000"></label><p id="website-runtime-note" class="field-help">Static files use the detected OpenResty installation.</p><p class="field-help">Creates a draft with starter code. Nothing is published until you review the code and click Publish. DNS and Cloudflare hostname routes are configured separately.</p><p class="form-error" role="alert"></p><div class="form-actions"><button class="button" type="submit">Create draft</button></div></form>`);$('#website-type').onchange=()=>{const t=$('#website-type').value;$('#website-upstream-field').hidden=t!=='proxy';$('#website-upstream').required=t==='proxy';$('#website-runtime-note').textContent=t==='proxy'?'Routes through the detected web engine. No runtime installation is required.':t==='static'?'Static files use the detected OpenResty installation.':d.runtimes[t]?.installed?'Isolated '+websiteType(t)+' sandbox container is installed and ready.':'Docker sandbox container for '+websiteType(t)+' ('+esc(d.runtimes[t]?.image||'')+') is not pulled yet. You can create the draft now, then pull the container runtime under Websites → Runtimes before publishing.';};if(websiteCategory!=='all')$('#website-type').value=websiteCategory;$('#website-type').onchange();form('website-create-form',async()=>{const s=await post('/api/websites/create',{type:$('#website-type').value,upstream:$('#website-upstream').value,domains:$('#website-domains').value,listenPort:Number($('#website-port').value),confirm:true});modal.close();await openWebsite(s.id);});}
-async function openWebsite(id,tab='overview',extra=null){if(!canLeaveWebsite())return;disposeWebsiteEditor();const s=await api('/api/websites/details?id='+id);websiteCurrent=s;if(s.existing)return existingWebsiteWorkspace(s,tab,extra);const missingRuntime=!['static','proxy'].includes(s.type)&&!websitesInventory?.runtimes[s.type]?.installed;content.innerHTML=`<div class="website-heading"><div><button id="websites-back" class="text-button">${icon('up')}All websites</button><div class="website-heading-name"><h2>${esc(s.domains[0])}</h2>${websiteState(s)}${s.pending?pill('Unpublished changes','amber'):''}</div><p>${esc(websiteType(s.type))}${missingRuntime?' · Website runtime not installed':''} · ${s.domains.length} domain${s.domains.length===1?'':'s'}</p></div><div class="row-actions">${!s.archived&&s.state==='published'?button('website-stop-top','Stop','stop'):''}${!s.archived&&s.state==='published'&&!['static','proxy'].includes(s.type)?button('website-restart-top','Restart','refresh'):''}${s.archived?button('website-restore','Restore',null):missingRuntime?button('website-install-runtime','Install runtime','download','primary'):button('website-publish',s.state==='published'?'Publish changes':'Publish','play','primary')}</div></div><div class="tabs">${[['overview','Overview'],['code','Files & code'],['settings','Domains & runtime'],['logs','Logs'],['https','HTTPS'],['routing','Routing']].map(([k,t])=>`<button class="tab ${tab===k?'active':''}" data-site-tab="${k}">${t}</button>`).join('')}</div>${s.dependencyContainer?`<div class="access-notice"><div><strong>Dependency cleanup required</strong><p>Clean up the previous dependency job before editing website files.</p></div>${button('site-dependency-cleanup','Clean dependency job','refresh')}</div>`:''}<div id="website-detail"></div>`;bind('websites-back',()=>{if(canLeaveWebsite()){disposeWebsiteEditor();websitesPage(generation);}});$$('[data-site-tab]').forEach(b=>b.onclick=action(()=>openWebsite(id,b.dataset.siteTab)));bind('website-publish',()=>publishWebsite(s));bind('website-install-runtime',async()=>{if(!canLeaveWebsite())return;const r=websitesInventory.runtimes[s.type];if(await confirmOperation('Install '+r.name+'?',`Pull the official ${r.image} website runtime. It will not publish this website yet.`,'Install runtime'))watch(await post('/api/websites/runtime',{runtime:s.type,confirm:true}),null,async()=>{websitesInventory=await api('/api/websites');await openWebsite(s.id);});});bind('website-restore',async()=>{await post('/api/websites/restore',{id:s.id,confirm:true});await openWebsite(id);});bind('site-dependency-cleanup',async()=>{if(await confirmOperation('Clean dependency job?','Remove the website’s dedicated dependency container and restore protected source permissions.','Clean up'))watch(await post('/api/websites/cleanup',{id:s.id,confirm:true}),null,()=>openWebsite(s.id));});if(s.dependencyContainer){$('#website-detail').innerHTML='';return;}bind('website-stop-top',async()=>{if(await confirmOperation('Stop website?',s.domains.join(', ')+' will stop serving. Files are retained.','Stop website'))watch(await post('/api/websites/stop',{id:s.id,confirm:true}),null,()=>openWebsite(s.id));});bind('website-restart-top',async()=>{if(await confirmOperation('Restart website?',s.domains[0]+' will briefly disconnect while its application restarts.','Restart'))watch(await post('/api/websites/restart',{id:s.id,confirm:true}),null,()=>openWebsite(s.id));});if(tab==='overview')websiteOverview(s);if(tab==='code')await websiteCode(s);if(tab==='settings')websiteSettings(s);if(tab==='logs')websiteLogs(s);if(tab==='https')websiteTLS(s);if(tab==='routing')websiteRouting(s);}
+async function openWebsite(id,tab='overview',extra=null){if(!canLeaveWebsite())return;disposeWebsiteEditor();const s=await api('/api/websites/details?id='+id);websiteCurrent=s;if(s.existing)return existingWebsiteWorkspace(s,tab,extra);const missingRuntime=!['static','proxy'].includes(s.type)&&!websitesInventory?.runtimes[s.type]?.installed;content.innerHTML=`<div class="website-heading"><div><button id="websites-back" class="text-button">${icon('up')}All websites</button><div class="website-heading-name"><h2>${esc(s.domains[0])}</h2>${websiteState(s)}${s.pending?pill('Unpublished changes','amber'):''}</div><p>${esc(websiteType(s.type))}${missingRuntime?' · Website runtime not installed':''} · ${s.domains.length} domain${s.domains.length===1?'':'s'}</p></div><div class="row-actions">${!s.archived&&s.state==='published'?button('website-stop-top','Stop','stop'):''}${!s.archived&&s.state==='published'&&!['static','proxy'].includes(s.type)?button('website-restart-top','Restart','refresh'):''}${s.archived?button('website-restore','Restore',null):missingRuntime?button('website-install-runtime','Install runtime','download','primary'):button('website-publish',s.state==='published'?'Publish changes':'Publish','play','primary')}</div></div><div class="tabs">${[['overview','Overview','overview'],['code','Files & code','folder'],['settings','Domains & runtime','server'],['logs','Logs','terminal'],['https','HTTPS','lock'],['routing','Routing','network']].map(([k,t,ic])=>`<button class="tab ${tab===k?'active':''}" data-site-tab="${k}">${icon(ic)} ${t}</button>`).join('')}</div>${s.dependencyContainer?`<div class="access-notice"><div><strong>Dependency cleanup required</strong><p>Clean up the previous dependency job before editing website files.</p></div>${button('site-dependency-cleanup','Clean dependency job','refresh')}</div>`:''}<div id="website-detail"></div>`;bind('websites-back',()=>{if(canLeaveWebsite()){disposeWebsiteEditor();websitesPage(generation);}});$$('[data-site-tab]').forEach(b=>b.onclick=action(()=>openWebsite(id,b.dataset.siteTab)));bind('website-publish',()=>publishWebsite(s));bind('website-install-runtime',async()=>{if(!canLeaveWebsite())return;const r=websitesInventory.runtimes[s.type];if(await confirmOperation('Install '+r.name+'?',`Pull the official ${r.image} website runtime. It will not publish this website yet.`,'Install runtime'))watch(await post('/api/websites/runtime',{runtime:s.type,confirm:true}),null,async()=>{websitesInventory=await api('/api/websites');await openWebsite(s.id);});});bind('website-restore',async()=>{await post('/api/websites/restore',{id:s.id,confirm:true});await openWebsite(id);});bind('site-dependency-cleanup',async()=>{if(await confirmOperation('Clean dependency job?','Remove the website’s dedicated dependency container and restore protected source permissions.','Clean up'))watch(await post('/api/websites/cleanup',{id:s.id,confirm:true}),null,()=>openWebsite(s.id));});if(s.dependencyContainer){$('#website-detail').innerHTML='';return;}bind('website-stop-top',async()=>{if(await confirmOperation('Stop website?',s.domains.join(', ')+' will stop serving. Files are retained.','Stop website'))watch(await post('/api/websites/stop',{id:s.id,confirm:true}),null,()=>openWebsite(s.id));});bind('website-restart-top',async()=>{if(await confirmOperation('Restart website?',s.domains[0]+' will briefly disconnect while its application restarts.','Restart'))watch(await post('/api/websites/restart',{id:s.id,confirm:true}),null,()=>openWebsite(s.id));});if(tab==='overview')websiteOverview(s);if(tab==='code')await websiteCode(s);if(tab==='settings')websiteSettings(s);if(tab==='logs')websiteLogs(s);if(tab==='https')websiteTLS(s);if(tab==='routing')websiteRouting(s);}
 async function publishWebsite(s){if(!canLeaveWebsite())return;const type=['static','proxy'].includes(s.type)?'its static files':'a new isolated '+websiteType(s.type)+' runtime';if(await confirmOperation('Publish website?',`Publish ${s.domains.join(', ')} on HTTP port ${s.listenPort}${s.tls?' and HTTPS port '+s.tls.port:''} using ${type}. OpenResty configuration is tested before reload. DNS must already point to this server.`,'Publish'))watch(await post('/api/websites/publish',{id:s.id,confirm:true}),null,()=>openWebsite(s.id,'routing'));}
 async function websiteCode(s){websiteFolder='.';$('#website-detail').innerHTML=`<div class="card website-code-card"><div class="toolbar"><div class="row-actions">${button('site-file-parent','Parent','up')}${button('site-new-file','New file','plus')}${button('site-new-folder','New folder','folder')}${button('site-upload','Upload','upload')}${button('site-trash','Trash','trash')}</div><div class="row-actions">${!['static','proxy'].includes(s.type)?button('site-dependencies','Install dependencies',null):''}<a class="icon-button" href="/api/websites/download?id=${s.id}&path=." title="Download source code" aria-label="Download source code">${icon('download')}</a>${button('site-file-history','History',null)}${button('site-file-save','Save file','check','primary')}</div></div><div class="website-code-layout"><div class="website-file-tree"><div id="site-file-path" class="website-tree-path">/</div><div id="site-file-list"></div></div><div class="website-editor-pane"><div class="editor-heading"><code id="site-editor-name">Select a text file</code><span id="site-editor-status"></span></div><div id="site-editor"><div class="table-empty-state">${icon('file')}<strong>Select a file to edit</strong><p>Changes are saved with a backup and checked for external edits.</p></div></div></div></div><div class="table-footer"><span id="site-file-progress"></span><span>${s.existing?'Document root: '+esc(s.root||s.fileRoot):'Runtime entry point: '+esc(['static','proxy'].includes(s.type)?'public/index.html':s.command)}</span></div><input id="site-upload-input" type="file" multiple hidden></div>`;$('#site-file-save').disabled=true;bind('site-file-parent',()=>browseWebsiteFiles(s,websiteFolder.split('/').slice(0,-1).join('/')||'.'));bind('site-new-file',()=>newWebsiteFile(s,'file'));bind('site-new-folder',()=>newWebsiteFile(s,'folder'));bind('site-trash',()=>websiteTrash(s));bind('site-upload',()=>$('#site-upload-input').click());$('#site-upload-input').onchange=()=>uploadWebsiteFiles(s,[...$('#site-upload-input').files]);bind('site-file-history',()=>websiteHistory(s));bind('site-file-save',async()=>{if(!websiteEditor||!websiteFile)return;const r=await post('/api/websites/file',{id:s.id,path:websiteFile,text:websiteEditor.getText(),revision:websiteRevision});websiteRevision=(await api('/api/websites/file?id='+s.id+'&path='+encodeURIComponent(websiteFile))).revision;websiteDirty=false;$('#site-editor-status').textContent='Saved';notify('File saved with a private backup. Use History to restore previous versions.');});bind('site-dependencies',async()=>{if(!canLeaveWebsite())return;if(await confirmOperation('Install website dependencies?',`Install ${s.type==='node'?'package.json':s.type==='python'?'requirements.txt':'composer.json'} dependencies in the website’s app directory using an isolated container. Dependency scripts may run inside that container.`,'Install dependencies'))watch(await post('/api/websites/dependencies',{id:s.id,confirm:true}));});await browseWebsiteFiles(s,'.');const starter=s.existing?'index.html':s.type==='php'?'public/index.php':['static','proxy'].includes(s.type)?'public/index.html':s.type==='node'?'server.mjs':'server.py';try{await editWebsiteFile(s,starter);}catch{};}
 async function browseWebsiteFiles(s,relative){const data=await api('/api/websites/files?id='+s.id+'&path='+encodeURIComponent(relative));if(websiteCurrent?.id!==s.id||!$('#site-file-list'))return;websiteFolder=data.path;$('#site-file-path').textContent='/'+(data.path==='.'?'':data.path);$('#site-file-parent').disabled=data.path==='.';const entries=data.entries.sort((a,b)=>Number(b.directory)-Number(a.directory)||a.name.localeCompare(b.name));$('#site-file-list').innerHTML=entries.map((e,i)=>`<div class="website-tree-item"><button class="website-tree-open" data-index="${i}" title="${esc(e.name)}">${icon(e.directory?'folder':'file')}<span>${esc(e.name)}</span></button><button class="icon-button website-file-more" data-index="${i}" title="Manage ${esc(e.name)}" aria-label="Manage ${esc(e.name)}">${icon('menu')}</button></div>`).join('')||'<p class="card-pad muted">Empty folder</p>';$$('.website-tree-open').forEach(b=>b.onclick=action(()=>{const e=entries[Number(b.dataset.index)],p=(websiteFolder==='.'?'':websiteFolder+'/')+e.name;return e.directory?browseWebsiteFiles(s,p):editWebsiteFile(s,p);}));$$('.website-file-more').forEach(b=>b.onclick=()=>manageWebsiteFile(s,entries[Number(b.dataset.index)]));}
@@ -67,66 +108,452 @@ function websiteRouting(s){$('#website-detail').innerHTML=`<div class="card mana
 window.addEventListener('beforeunload',e=>{if(websiteDirty){e.preventDefault();e.returnValue='';}});
 async function websiteHistory(s){if(!websiteFile){notify('Select a file first.');return;}const file=websiteFile,rows=await api('/api/websites/backups?id='+s.id+'&path='+encodeURIComponent(file));openModal('File history',`<div class="modal-body"><p><code>${esc(file)}</code></p><div class="table-wrap"><table class="management-table"><thead><tr><th>SAVED VERSION</th><th class="actions-column">ACTION</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${esc(new Date(r.time).toLocaleString())}</td><td class="actions-column"><button class="button secondary small site-restore-version" data-index="${i}">Restore</button></td></tr>`).join('')||'<tr><td colspan="2">No previous versions yet.</td></tr>'}</tbody></table></div><p class="field-help">Backups are private and are never served as website files. Restoring also saves the current version.</p></div>`);$$('.site-restore-version').forEach(b=>b.onclick=action(async()=>{if(!canLeaveWebsite())return;if(await confirmOperation('Restore this version?',`Replace ${file} with the selected saved version. A private backup of the current file will be kept.`,'Restore')){await post('/api/websites/backup/restore',{id:s.id,backup:rows[Number(b.dataset.index)].id,confirm:true});modal.close();await editWebsiteFile(s,file);notify('Previous version restored.');}}));}
 
-function websiteOverview(s){const missing=!['static','proxy'].includes(s.type)&&!websitesInventory?.runtimes[s.type]?.installed;$('#website-detail').innerHTML=`<div class="website-summary-grid"><div class="card card-pad"><h3>Application</h3><p>${esc(websiteType(s.type))}</p><p>${websiteState(s)}</p></div><div class="card card-pad"><h3>Domains</h3><p>${s.domains.map(esc).join('<br>')}</p></div><div class="card card-pad"><h3>HTTPS</h3><p>${s.tls?'Certificate saved · expires '+esc(s.tls.expires):'Not configured'}</p></div></div><div class="card"><div class="card-header"><h2>Manage this website</h2>${s.pending?pill('Changes waiting to publish','amber'):pill('No pending changes','green')}</div><ul class="website-task-list">${[['code','folder','Files & code','Upload, edit, rename, download and restore website files.','Open files'],['settings','server','Domains & application','Set domains, ports, startup command, environment and resource limits.','Open settings'],['logs','file','Logs','Read application, access and web-server errors.','View logs'],['https','lock','HTTPS certificate','Install or replace a certificate and its private key.','Manage HTTPS'],['routing','network','Routing','Review serving addresses and the published web-server configuration.','View routing']].map(([tab,i,title,description,label])=>`<li>${icon(i)}<div><strong>${title}</strong><p>${description}</p></div><button class="button secondary website-task" data-tab="${tab}">${label}</button></li>`).join('')}</ul></div>${s.state!=='published'?notice(missing?'Install the required runtime, add your files and settings, then Publish.':'This website is not serving yet. Add your files and review settings, then Publish.'):''}`;$$('.website-task').forEach(b=>b.onclick=action(()=>openWebsite(s.id,b.dataset.tab)));}
-async function existingWebsiteWorkspace(s,tab='overview',extra=null){content.innerHTML=`<div class="website-heading"><div><button id="websites-back" class="text-button">${icon('up')}All websites</button><div class="website-heading-name"><h2>${esc(s.domains[0])}</h2>${pill(s.enabled?'Enabled':'Disabled',s.enabled?'green':'')}</div><p>${esc(s.kind)} · Existing configuration · ${esc(s.engine)}</p></div><div class="website-command-bar">${button('existing-reload','Test & reload','refresh')}${button('existing-toggle',s.enabled?'Disable website':'Enable website',s.enabled?'stop':'play',s.enabled?'secondary':'primary')}</div></div><div class="tabs">${[['overview','Overview'],['code','Files & code'],['configs','Configurations'],['settings','Domains & upstream'],['logs','Logs'],['routing','Routing configuration'],['https','HTTPS'],['backups','Configuration backups']].map(([key,label])=>`<button class="tab ${tab===key?'active':''}" data-existing-tab="${key}">${label}</button>`).join('')}</div><div id="website-detail"></div>`;bind('websites-back',()=>{if(canLeaveWebsite()){disposeWebsiteEditor();websitesPage(generation);}});$$('[data-existing-tab]').forEach(b=>b.onclick=action(()=>openWebsite(s.id,b.dataset.existingTab)));bind('existing-reload',()=>existingWebsiteAction(s,'reload'));bind('existing-toggle',()=>existingWebsiteAction(s,s.enabled?'disable':'enable'));
- if(tab==='overview'){
-  const isAlgo = s.isAlgo || s.domains?.some(d=>d.includes('algo')) || s.detectedStack || s.nativeService;
-  const hybridCard = isAlgo ? `<div class="card card-pad" style="border-left: 4px solid var(--accent, #10b981); background: rgba(16,185,129,0.06); margin-bottom: 16px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:24px">⚡</span>
-        <div>
-          <strong style="font-size:16px">${esc(s.nativeService?.description || 'OpenAlgo Python Trading Server')}</strong>
-          <div style="font-size:12px;color:var(--text-muted)">Broker-agnostic trading automation &amp; execution engine</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        ${pill(s.nativeService?.unit || 'openalgo.service (active)', 'green')}
-        ${pill('Hybrid: Python + React', 'blue')}
-        ${pill('Port 5000', 'purple')}
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-top:12px">
-      <div style="background:var(--card-bg, rgba(255,255,255,0.03));padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:14px">🐍</span>
-          <strong style="font-size:13px">Python Backend &amp; Core Engine</strong>
-        </div>
-        <p style="margin:0 0 6px 0;font-size:12px;line-height:1.4">Flask with eventlet / Werkzeug / Gunicorn · .venv / uv</p>
-        <code style="font-size:11px;color:var(--accent)">app.py · unified REST API (/api/v1/) · WebSockets</code>
-      </div>
-      <div style="background:var(--card-bg, rgba(255,255,255,0.03));padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:14px">⚛️</span>
-          <strong style="font-size:13px">Node.js / React Frontend UI</strong>
-        </div>
-        <p style="margin:0 0 6px 0;font-size:12px;line-height:1.4">React 19 · TypeScript · Vite · Tailwind CSS · TanStack Query</p>
-        <code style="font-size:11px;color:var(--accent)">frontend/dist/ served directly by Flask on :5000</code>
-      </div>
-      <div style="background:var(--card-bg, rgba(255,255,255,0.03));padding:10px 12px;border-radius:8px;border:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:14px">📁</span>
-          <strong style="font-size:13px">Project Workspace</strong>
-        </div>
-        <p style="margin:0 0 6px 0;font-size:11px;font-family:monospace;word-break:break-all">${esc(s.fileRoot||s.nativeService?.workingDirectory||'/home/cyber/Downloads/openalgo')}</p>
-        <button id="algo-browse-files-btn" class="button secondary small" style="margin-top:2px">Browse &amp; Edit Files</button>
-      </div>
-    </div>
-    ${s.detectedConfigs&&s.detectedConfigs.length?`<div style="border-top:1px solid var(--border,var(--line));padding-top:12px;margin-top:12px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><strong style="font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);">Detected Application Configurations (${s.detectedConfigs.length})</strong><button id="hybrid-all-configs" class="text-button" style="font-size:11px;">Inspect All Configurations &rarr;</button></div><div style="display:flex;flex-wrap:wrap;gap:6px;">${s.detectedConfigs.map(cf=>`<button type="button" class="text-button hybrid-config-pill" data-config-file="${esc(cf.name)}" style="background:var(--card-bg,rgba(255,255,255,0.05));border:1px solid var(--border,var(--line));border-radius:6px;padding:3px 8px;font-size:11px;font-family:monospace;cursor:pointer;">📄 ${esc(cf.name)}</button>`).join('')}</div><div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;"><button id="hybrid-btn-configs" class="button secondary small">${icon("edit")} Configurations (${s.detectedConfigs.length})</button><button id="hybrid-btn-logs" class="button secondary small">${icon("file")} Service Logs</button><button id="hybrid-btn-code" class="button secondary small">${icon("folder")} Browse Project Code</button><button id="hybrid-btn-restart" class="button secondary small">${icon("refresh")} Restart Service</button></div></div>`:''}
-  </div>` : '';
+function websiteOverview(s){
+  const missing=!['static','proxy'].includes(s.type)&&!websitesInventory?.runtimes[s.type]?.installed;
+  const isRunning=s.state==='published';
+  const primaryDomain=s.domains[0]||'localhost';
 
-  $('#website-detail').innerHTML=`${hybridCard}<div class="website-summary-grid"><div class="card card-pad"><h3>Serving</h3><p>${s.enabled?'Enabled in the web engine':'Disabled in the web engine'}</p><p>${s.listen.map(esc).join('<br>')||'Review routing configuration'}</p></div><div class="card card-pad"><h3>Application upstream</h3><p>${s.upstreams.map(esc).join('<br>')||'Serves website files directly'}</p>${isAlgo?`<div style="margin-top:6px;display:flex;align-items:center;gap:6px">${pill(s.nativeService?.unit||'openalgo.service','green')}${button('existing-open-code','Browse Files','folder','secondary small')}</div>`:s.upstreams.length?button('existing-docker','Open Docker','docker'):''}</div><div class="card card-pad"><h3>Files</h3><p>${esc(s.fileRoot||'No local document root detected')}</p></div></div><div class="card"><div class="card-header"><h2>Website management</h2></div><ul class="website-task-list">${[['settings','network','Domains & upstream','Update domain names and the application upstream using a form. The shared web engine is tested before changes are applied.'],['code','folder','Files & code',s.fileRoot?(s.filesStaged?'Edit the staged files, then select Use these files when ready.':isAlgo?'Manage project files: app.py, frontend/, strategies, and configuration files.':'Manage the document root: edit, upload, download and restore files.'):s.upstreams.length?'Manage application files in Docker. Routing controls the application upstream.':'The current document root is inside the web-engine image. Prepare an editable folder, upload your website, then switch this site to it.'],['routing','network','Routing configuration','Edit the detected site and proxy include files. Enabled sites are tested and reloaded, with restoration on failure.'],['logs','file','Access & error logs','Inspect logs detected from the current site configuration.'],['https','lock','HTTPS','Review and replace the existing origin certificate.'],['backups','disk','Configuration backups','Restore previous configuration versions with validation.']].map(([key,i,label,description])=>`<li>${icon(i)}<div><strong>${label}</strong><p>${description}</p></div><button class="button secondary existing-task" data-tab="${key}">Manage</button></li>`).join('')}</ul></div><div class="notice">${icon('info')}<span>This panel manages the current files directly. Changes made by another panel are detected before saving. Disabling affects every domain in this configuration; it does not stop the upstream application.</span></div>`;
+  const heroHtml=`
+    <div class="app-overview-hero card">
+      <div class="app-overview-hero-left">
+        <div class="app-hero-icon">
+          ${icon('globe')}
+          <span class="status-pulse-dot ${isRunning?'green':'amber'}"></span>
+        </div>
+        <div class="app-hero-title-group">
+          <h2>
+            ${esc(primaryDomain)}
+            ${websiteState(s)}
+            ${pill(websiteType(s.type),'blue')}
+          </h2>
+          <p>${esc(websiteType(s.type))} · ${s.domains.length} domain${s.domains.length===1?'':'s'}${missing?' · Runtime container not installed':''}</p>
+          <div class="app-hero-badges">
+            ${pill('HTTP Port '+s.listenPort,'purple')}
+            ${s.tls?pill('HTTPS Port '+s.tls.port,'green'):pill('HTTP Only','amber')}
+            ${pill('OpenResty Nginx + Coraza WAF','blue')}
+          </div>
+        </div>
+      </div>
+      <div class="app-overview-hero-actions">
+        ${!s.archived&&s.state==='published'&&!['static','proxy'].includes(s.type)?button('hero-btn-restart','Restart','refresh','secondary small'):''}
+        ${button('hero-btn-code','Browse Files','folder','secondary small')}
+        ${button('hero-btn-logs','Live Logs','terminal','secondary small')}
+        ${s.state==='published'?button('hero-btn-publish','Publish changes','play','primary small'):button('hero-btn-publish','Publish Website','play','primary small')}
+      </div>
+    </div>
+  `;
+
+  const archHtml=`
+    <div class="app-architecture-grid">
+      <div class="app-arch-card card">
+        <div class="app-arch-card-header">
+          <div class="app-arch-card-title">${icon('server')} Runtime Engine</div>
+          ${pill(websiteType(s.type),'blue')}
+        </div>
+        <div class="app-arch-specs">
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Runtime Type</span><span class="app-arch-spec-val">${esc(websiteType(s.type))}</span></div>
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Engine Status</span><span class="app-arch-spec-val">${websiteState(s)}</span></div>
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Runtime Image</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">${esc(websitesInventory?.runtimes[s.type]?.image||s.type)}</code></span></div>
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Pending Edits</span><span class="app-arch-spec-val">${s.pending?pill('Unpublished changes','amber'):pill('Synced','green')}</span></div>
+        </div>
+      </div>
+      <div class="app-arch-card card">
+        <div class="app-arch-card-header">
+          <div class="app-arch-card-title">${icon('network')} Domains &amp; Serving</div>
+          ${pill(s.listenPort?':'+s.listenPort:'Not listening','purple')}
+        </div>
+        <div class="app-arch-specs">
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Configured Domains</span><span class="app-arch-spec-val">${s.domains.map(esc).join(', ')}</span></div>
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Internal Listen</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">127.0.0.1:${s.listenPort}</code></span></div>
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Coraza WAF</span><span class="app-arch-spec-val">OWASP Core Rule Set Active</span></div>
+        </div>
+      </div>
+      <div class="app-arch-card card">
+        <div class="app-arch-card-header">
+          <div class="app-arch-card-title">${icon('lock')} TLS &amp; HTTPS</div>
+          ${pill(s.tls?'Secured':'No TLS',s.tls?'green':'amber')}
+        </div>
+        <div class="app-arch-specs">
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">Certificate Status</span><span class="app-arch-spec-val">${s.tls?'Active · expires '+esc(s.tls.expires):'Not configured'}</span></div>
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">HTTPS Port</span><span class="app-arch-spec-val">${s.tls?s.tls.port:'None'}</span></div>
+          <div class="app-arch-spec-row"><span class="app-arch-spec-label">HTTP to HTTPS</span><span class="app-arch-spec-val">${s.tls?'Enforced':'Disabled'}</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const operationsHtml=`
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div>
+          <h2>Website Management</h2>
+          <p>Application lifecycle, source code files, domains, runtime limits, and routing</p>
+        </div>
+      </div>
+      <div class="card-pad" style="padding-top:0;">
+        <div class="operations-matrix-grid">
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('folder')}</div>
+              <div class="op-card-copy">
+                <h4>Files &amp; Code</h4>
+                <p>Upload, edit, rename, download, and restore website files in the atomic workspace.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small website-task" data-tab="code">Open Files</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('server')}</div>
+              <div class="op-card-copy">
+                <h4>Domains &amp; Application</h4>
+                <p>Set domains, internal ports, startup command, environment variables, and memory limits.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small website-task" data-tab="settings">Open Settings</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('terminal')}</div>
+              <div class="op-card-copy">
+                <h4>Logs &amp; Telemetry</h4>
+                <p>Stream real-time application logs, Nginx access logs, and web-server errors.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small website-task" data-tab="logs">View Logs</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('lock')}</div>
+              <div class="op-card-copy">
+                <h4>HTTPS Certificate</h4>
+                <p>Install or replace custom origin SSL certificates and manage private keys securely.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small website-task" data-tab="https">Manage HTTPS</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('network')}</div>
+              <div class="op-card-copy">
+                <h4>Routing Configuration</h4>
+                <p>Review serving addresses and the published OpenResty / Nginx virtual host configuration.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small website-task" data-tab="routing">View Routing</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  $('#website-detail').innerHTML=`${heroHtml}${archHtml}${operationsHtml}${s.state!=='published'?notice(missing?'Install the required runtime, add your files and settings, then Publish.':'This website is not serving yet. Add your files and review settings, then Publish.'):''}`;
+
+  $$('.website-task').forEach(b=>b.onclick=action(()=>openWebsite(s.id,b.dataset.tab)));
+  bind('hero-btn-code',()=>openWebsite(s.id,'code'));
+  bind('hero-btn-logs',()=>openWebsite(s.id,'logs'));
+  bind('hero-btn-publish',()=>publishWebsite(s));
+  bind('hero-btn-restart',async()=>{
+    if(!await confirmOperation('Restart website?',s.domains[0]+' will briefly disconnect while its container restarts.','Restart'))return;
+    watch(await post('/api/websites/restart',{id:s.id,confirm:true}),null,()=>openWebsite(s.id));
+  });
+}
+async function existingWebsiteWorkspace(s,tab='overview',extra=null){content.innerHTML=`<div class="website-heading"><div><button id="websites-back" class="text-button">${icon('up')}All websites</button><div class="website-heading-name"><h2>${esc(s.domains[0])}</h2>${pill(s.enabled?'Enabled':'Disabled',s.enabled?'green':'')}</div><p>${esc(s.kind)} · Existing configuration · ${esc(s.engine)}</p></div><div class="website-command-bar">${button('existing-reload','Test & reload','refresh')}${button('existing-toggle',s.enabled?'Disable website':'Enable website',s.enabled?'stop':'play',s.enabled?'secondary':'primary')}</div></div><div class="tabs">${[['overview','Overview','overview'],['code','Files & code','folder'],['configs','Configurations','file'],['settings','Domains & upstream','server'],['logs','Logs','terminal'],['routing','Routing configuration','network'],['https','HTTPS','lock'],['backups','Configuration backups','disk']].map(([key,label,ic])=>`<button class="tab ${tab===key?'active':''}" data-existing-tab="${key}">${icon(ic)} ${label}</button>`).join('')}</div><div id="website-detail"></div>`;bind('websites-back',()=>{if(canLeaveWebsite()){disposeWebsiteEditor();websitesPage(generation);}});$$('[data-existing-tab]').forEach(b=>b.onclick=action(()=>openWebsite(s.id,b.dataset.existingTab)));bind('existing-reload',()=>existingWebsiteAction(s,'reload'));bind('existing-toggle',()=>existingWebsiteAction(s,s.enabled?'disable':'enable'));
+ function renderExistingOverview(s){
+  const isAlgo=s.isAlgo||s.domains?.some(d=>d.includes('algo'))||s.detectedStack||s.nativeService;
+  const isPanel=s.domains?.some(d=>d.includes('cyber.'));
+  const stack=s.detectedStack||(isAlgo?{
+    type:'Hybrid (Python Backend + React Frontend)',
+    backend:'Python 3.12 (Flask, eventlet / Werkzeug / Gunicorn, app.py, .venv)',
+    frontend:'React 19, TypeScript, Vite, Tailwind CSS, TanStack Query (frontend/dist/)',
+    dist:'frontend/dist',
+    workingDirectory:s.fileRoot||s.nativeService?.workingDirectory||'/home/cyber/Downloads/openalgo',
+    role:'Python backend core engine on port 5000 serving built React UI from frontend/dist/'
+  }:null);
+
+  const configs=s.detectedConfigs||[];
+  const primaryDomain=s.domains[0]||'localhost';
+  const upstreamTarget=s.upstreams?.[0]||(isAlgo?'127.0.0.1:5000':'Direct Static Files');
+  const listenAddresses=s.listen?.length?s.listen.join(', '):'Port 80 / 443';
+
+  // Hero Status Banner
+  const heroHtml=`
+    <div class="app-overview-hero card">
+      <div class="app-overview-hero-left">
+        <div class="app-hero-icon">
+          ${icon(isAlgo?'server':'globe')}
+          <span class="status-pulse-dot ${s.enabled?'green':'amber'}"></span>
+        </div>
+        <div class="app-hero-title-group">
+          <h2>
+            ${esc(primaryDomain)}
+            ${pill(s.enabled?(s.nativeService?.status==='running'||isAlgo?'● Active · '+(s.nativeService?.unit||'openalgo.service'):'● Routing Enabled'):'Disabled',s.enabled?'green':'amber')}
+            ${stack?pill('Hybrid: Python + React','blue'):pill(s.kind||'Reverse Proxy','blue')}
+          </h2>
+          <p>${esc(s.nativeService?.description||(isAlgo?'OpenAlgo Python Trading Server · Broker-Agnostic Execution Engine':'Production Web Route & Service Upstream'))}</p>
+          <div class="app-hero-badges">
+            ${isAlgo?pill('Port 5000','purple'):(s.upstreams?.length?pill(s.upstreams[0],'purple'):'')}
+            ${pill('OpenResty / Nginx Engine','blue')}
+            ${pill('Coraza WAF (OWASP CRS v4)','green')}
+            ${s.pair?pill('HTTPS Encrypted','green'):pill('HTTP / Edge SSL','blue')}
+          </div>
+        </div>
+      </div>
+      <div class="app-overview-hero-actions">
+        ${isAlgo||s.nativeService?`<button id="hero-btn-restart" class="button secondary small" type="button">${icon('refresh')} Restart Service</button>`:''}
+        ${button('hero-btn-code','Browse Files','folder','secondary small')}
+        ${configs.length?`<button id="hero-btn-configs" class="button secondary small" type="button">${icon('file')} Configurations (${configs.length})</button>`:''}
+        ${button('hero-btn-logs','Live Logs','terminal','secondary small')}
+        ${button('hero-btn-reload','Test & Reload','refresh','secondary small')}
+      </div>
+    </div>
+  `;
+
+  // Architecture & Component Cards Grid
+  let archHtml='';
+  if(stack){
+    archHtml=`
+      <div class="app-architecture-grid">
+        <div class="app-arch-card card">
+          <div class="app-arch-card-header">
+            <div class="app-arch-card-title">${icon('server')} Backend &amp; Core Engine</div>
+            ${pill('Python 3.12','blue')}
+          </div>
+          <div class="app-arch-specs">
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Framework</span><span class="app-arch-spec-val">Flask · eventlet / Gunicorn</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Environment</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">.venv / uv</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Service Unit</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">${esc(s.nativeService?.unit||'openalgo.service')}</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Entry Point</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">app.py</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Capabilities</span><span class="app-arch-spec-val">REST API (/api/v1/) · WebSockets</span></div>
+          </div>
+        </div>
+        <div class="app-arch-card card">
+          <div class="app-arch-card-header">
+            <div class="app-arch-card-title">${icon('globe')} Client Surface &amp; UI</div>
+            ${pill('React 19 Vite','green')}
+          </div>
+          <div class="app-arch-specs">
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">UI Framework</span><span class="app-arch-spec-val">React 19 · TypeScript</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Styling &amp; Query</span><span class="app-arch-spec-val">Tailwind CSS · TanStack Query</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Target Build</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">frontend/dist/</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Distribution</span><span class="app-arch-spec-val">Served via Flask on port 5000</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Dev Mode</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">npm run dev</code> (frontend/)</span></div>
+          </div>
+        </div>
+        <div class="app-arch-card card">
+          <div class="app-arch-card-header">
+            <div class="app-arch-card-title">${icon('network')} Ingress &amp; Reverse Proxy</div>
+            ${pill('OpenResty Nginx','blue')}
+          </div>
+          <div class="app-arch-specs">
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Public Domain</span><span class="app-arch-spec-val">${esc(primaryDomain)}</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Internal Upstream</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">${esc(upstreamTarget)}</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Serving Ports</span><span class="app-arch-spec-val">${esc(listenAddresses)}</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">WAF Defense</span><span class="app-arch-spec-val">Coraza OWASP CRS v4 Active</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">TLS Status</span><span class="app-arch-spec-val">${s.pair?'Origin Certificate Active':'Edge TLS via Cloudflare'}</span></div>
+          </div>
+        </div>
+        <div class="app-arch-card card">
+          <div class="app-arch-card-header">
+            <div class="app-arch-card-title">${icon('folder')} Workspace Directory</div>
+            <button id="arch-open-code-btn" class="button secondary small" type="button">${icon('folder')} Browse Files</button>
+          </div>
+          <div class="app-arch-specs">
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Filesystem Path</span><span class="app-arch-spec-val"><code class="app-arch-spec-code" style="word-break:break-all;">${esc(s.fileRoot||s.nativeService?.workingDirectory||'/home/cyber/Downloads/openalgo')}</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Configurations</span><span class="app-arch-spec-val">${configs.length} project files identified</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Staged Status</span><span class="app-arch-spec-val">${s.filesStaged?'Staged directory active':'Live project workspace'}</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">File Operations</span><span class="app-arch-spec-val">Atomic write, edit, upload, git</span></div>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    archHtml=`
+      <div class="app-architecture-grid">
+        <div class="app-arch-card card">
+          <div class="app-arch-card-header">
+            <div class="app-arch-card-title">${icon('network')} Ingress &amp; Upstream</div>
+            ${pill(s.enabled?'Enabled':'Disabled',s.enabled?'green':'amber')}
+          </div>
+          <div class="app-arch-specs">
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Public Domains</span><span class="app-arch-spec-val">${s.domains.map(esc).join(', ')}</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Upstream Destination</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">${esc(upstreamTarget)}</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Listen Sockets</span><span class="app-arch-spec-val">${esc(listenAddresses)}</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Routing Engine</span><span class="app-arch-spec-val">${esc(s.engine||'OpenResty / Nginx')}</span></div>
+          </div>
+        </div>
+        <div class="app-arch-card card">
+          <div class="app-arch-card-header">
+            <div class="app-arch-card-title">${icon('folder')} Document Root &amp; Files</div>
+            ${s.fileRoot?button('arch-open-code-btn','Browse Files','folder','secondary small'):''}
+          </div>
+          <div class="app-arch-specs">
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Document Root</span><span class="app-arch-spec-val"><code class="app-arch-spec-code">${esc(s.fileRoot||'Internal web engine root')}</code></span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Serving Source</span><span class="app-arch-spec-val">${s.upstreams?.length?'Reverse proxy forwarding to upstream':'Static files served directly'}</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Detected Configs</span><span class="app-arch-spec-val">${configs.length} files detected</span></div>
+          </div>
+        </div>
+        <div class="app-arch-card card">
+          <div class="app-arch-card-header">
+            <div class="app-arch-card-title">${icon('lock')} TLS &amp; Security</div>
+            ${pill(s.pair?'HTTPS':'HTTP',s.pair?'green':'blue')}
+          </div>
+          <div class="app-arch-specs">
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Origin Certificate</span><span class="app-arch-spec-val">${s.pair?'Custom Certificate Saved':'Edge TLS / Direct HTTP'}</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">WAF Protection</span><span class="app-arch-spec-val">Coraza OWASP CRS v4 Active</span></div>
+            <div class="app-arch-spec-row"><span class="app-arch-spec-label">Ingress Channel</span><span class="app-arch-spec-val">Cloudflare Tunnel / Direct Nginx</span></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Zero-Trust Configuration Inspector Shelf
+  const configShelfHtml=configs.length?`
+    <div class="config-inspector-card card">
+      <div class="config-inspector-head">
+        <div class="config-inspector-title">
+          <h3>Zero-Trust Project Configurations (${configs.length})</h3>
+          <p>Sensitive credentials (API keys, secrets, tokens) are automatically redacted until explicitly unmasked by an administrator.</p>
+        </div>
+        <button id="overview-inspect-all-configs" class="button secondary small" type="button">${icon('file')} Inspect All Configurations &rarr;</button>
+      </div>
+      <div class="config-pills-shelf">
+        ${configs.map(cf=>`
+          <button type="button" class="config-pill-btn hybrid-config-pill" data-config-file="${esc(cf.name)}" title="Inspect ${esc(cf.name)}">
+            ${icon(cf.type==='env'?'lock':cf.type==='systemd'?'server':'file')}
+            <span>${esc(cf.name)}</span>
+            <span class="config-size">${Math.round((cf.size||0)/1024)} KB</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `:'';
+
+  // Interactive Operations Matrix Grid
+  const operationsHtml=`
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div>
+          <h2>Website &amp; Application Operations</h2>
+          <p>Direct workspace management tools, service inspection, and configuration lifecycle controls</p>
+        </div>
+      </div>
+      <div class="card-pad" style="padding-top:0;">
+        <div class="operations-matrix-grid">
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('folder')}</div>
+              <div class="op-card-copy">
+                <h4>Files &amp; Code</h4>
+                <p>Browse, upload, download, and edit source files directly in the browser with atomic commits.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small existing-task" data-tab="code">Open Files</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('file')}</div>
+              <div class="op-card-copy">
+                <h4>Configurations</h4>
+                <p>Inspect detected configuration files (.env, app.py, systemd units) with zero-trust secret masking.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small existing-task" data-tab="configs">View Configs</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('network')}</div>
+              <div class="op-card-copy">
+                <h4>Domains &amp; Upstream</h4>
+                <p>Update domain names, proxy destinations, and upstream application socket mappings safely.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small existing-task" data-tab="settings">Manage Upstream</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('terminal')}</div>
+              <div class="op-card-copy">
+                <h4>Logs &amp; Telemetry</h4>
+                <p>Stream real-time application runtime logs, Nginx access logs, and upstream error traces.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small existing-task" data-tab="logs">Stream Logs</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('server')}</div>
+              <div class="op-card-copy">
+                <h4>Routing Configuration</h4>
+                <p>Inspect and fine-tune Nginx virtual host directives, location blocks, and rewrite rules.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small existing-task" data-tab="routing">Edit Routing</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('lock')}</div>
+              <div class="op-card-copy">
+                <h4>HTTPS &amp; Certificates</h4>
+                <p>Review active origin SSL certificates, install custom certificates, and check expiry dates.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small existing-task" data-tab="https">Manage TLS</button>
+            </div>
+          </div>
+          <div class="op-card">
+            <div class="op-card-header">
+              <div class="op-card-icon">${icon('disk')}</div>
+              <div class="op-card-copy">
+                <h4>Configuration Backups</h4>
+                <p>Restore previous verified virtual host and proxy configuration snapshots on demand.</p>
+              </div>
+            </div>
+            <div class="op-card-footer">
+              <button class="button secondary small existing-task" data-tab="backups">View Backups</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  $('#website-detail').innerHTML=`${heroHtml}${archHtml}${configShelfHtml}${operationsHtml}`;
+
+  // Event bindings
   $$('.existing-task').forEach(b=>b.onclick=action(()=>openWebsite(s.id,b.dataset.tab)));
-  bind('existing-docker',()=>route('docker'));
-  bind('existing-open-code',()=>openWebsite(s.id,'code'));
-  bind('algo-browse-files-btn',()=>openWebsite(s.id,'code'));
-  $('.hybrid-config-pill').forEach(b=>b.onclick=()=>openWebsite(s.id,'configs',b.dataset.configFile));
-  bind('hybrid-all-configs',()=>openWebsite(s.id,'configs'));
-  bind('hybrid-btn-configs',()=>openWebsite(s.id,'configs'));
-  bind('hybrid-btn-logs',()=>openWebsite(s.id,'logs'));
-  bind('hybrid-btn-code',()=>openWebsite(s.id,'code'));
-  bind('hybrid-btn-restart',async()=>{
-    if(!await confirmOperation('Restart '+(s.nativeService?.unit||'Service')+'?','This will restart the underlying application service.','Restart Now'))return;
+  $$('.hybrid-config-pill').forEach(b=>b.onclick=()=>openWebsite(s.id,'configs',b.dataset.configFile));
+  bind('overview-inspect-all-configs',()=>openWebsite(s.id,'configs'));
+  bind('hero-btn-code',()=>openWebsite(s.id,'code'));
+  bind('arch-open-code-btn',()=>openWebsite(s.id,'code'));
+  bind('hero-btn-configs',()=>openWebsite(s.id,'configs'));
+  bind('hero-btn-logs',()=>openWebsite(s.id,'logs'));
+  bind('hero-btn-reload',()=>existingWebsiteAction(s,'reload'));
+  bind('hero-btn-restart',async()=>{
+    const unitName=s.nativeService?.unit||'openalgo.service';
+    if(!await confirmOperation('Restart '+unitName+'?','This will restart the application service. Connected WebSocket clients will briefly reconnect.','Restart Now'))return;
     try{
       notify('Restarting service…');
       const r=await post('/api/websites/existing/service-restart',{id:s.id,confirm:true});
@@ -135,6 +562,8 @@ async function existingWebsiteWorkspace(s,tab='overview',extra=null){content.inn
     }catch(err){notify('Restart failed: '+err.message);}
   });
 }
+
+ if(tab==='overview')renderExistingOverview(s);
  if(tab==='code'){if(s.fileRoot){await websiteCode(s);if(s.filesStaged){$('#website-detail').insertAdjacentHTML('afterbegin',`<div class="access-notice"><div><strong>Staged website files</strong><p>These files are not live yet. Upload your website, then switch this site to the prepared folder.</p></div>${button('existing-files-activate','Use these files','play','primary')}</div>`);bind('existing-files-activate',async()=>{if(!canLeaveWebsite()||!await confirmOperation('Use prepared website files?',s.domains.join(', ')+' will start serving this folder. Its previous files are retained and the old routing is backed up.','Use these files'))return;await post('/api/websites/existing/files/activate',{id:s.id,revision:s.revision,confirm:true});await openWebsite(s.id,'code');});}}else{$('#website-detail').innerHTML=`<div class="card card-pad"><h2>${s.upstreams.length?'Application files':'Prepare website files'}</h2><p>${s.upstreams.length?'This site forwards traffic to an upstream application. Manage its application container in Docker.':'The current root is inside the web-engine image and has no host folder to edit. Prepare a separate folder, upload your website, then activate it. Preparing files does not change the running website.'}</p><div class="form-actions">${s.upstreams.length?button('existing-open-docker','Open Docker','docker'):button('existing-files-prepare','Prepare editable folder','folder','primary')}</div></div>`;bind('existing-open-docker',()=>route('docker'));bind('existing-files-prepare',async()=>{await post('/api/websites/existing/files/prepare',{id:s.id,revision:s.revision,confirm:true});await openWebsite(s.id,'code');});}}
  if(tab==='configs')await existingConfigs(s,extra);if(tab==='settings')existingSettings(s);if(tab==='routing')existingRouting(s);
  if(tab==='logs'){await websiteLogs(s);const runtime=$('#site-log-kind option[value=runtime]');if(runtime)runtime.remove();$('#site-log-kind').value='access';$('#site-log-kind').dispatchEvent(new Event('change'));}
