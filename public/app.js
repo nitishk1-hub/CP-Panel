@@ -49,9 +49,10 @@ function syncRouteState(){
  try{sessionStorage.setItem('panel-route-state',JSON.stringify({view,sub,dockerTab,websiteCategory,websiteTab,databaseCategory,nativeDatabaseTab,monitoringCategory,securitySection:typeof securitySection==='string'?securitySection:'map'}));}catch{}
 }
 function restoreRouteState(){
- const validViews=['overview','applications','docker','websites','databases','monitoring','waf','system','users','tasks','appearance'];
+ const validViews=['overview','docker','websites','databases','monitoring','waf','system','users','tasks','appearance'];
  const h=location.hash.replace(/^#\/?/,'').split('/').filter(Boolean);
  if(h[0]==='security')h[0]='waf';
+ if(h[0]==='applications')h[0]='websites';
  if(h[0]&&validViews.includes(h[0])){
   view=h[0];
   const d=h[1];
@@ -223,7 +224,6 @@ async function render(){if(!canLeaveWebsite())return;disposeSecurityCenter();dis
  };
  const headingMap={
   overview:['Overview','Real-time host telemetry, mounted storage and active workloads','Overview'],
-  applications:['Discovered Host Applications','Automatic host scanner for native services, hybrid engines and container stacks','Applications'],
   docker:dockerTitles[dockerTab]||dockerTitles.containers,
   websites:websiteTab!=='sites'?websiteTitles[websiteTab]:(websiteTitles[websiteCategory]||websiteTitles.all),
   databases:[dbNames[databaseCategory]||'Databases','Native APT-managed database services and cluster controls','Databases / '+(dbNames[databaseCategory]||'All')],
@@ -235,7 +235,7 @@ async function render(){if(!canLeaveWebsite())return;disposeSecurityCenter();dis
   appearance:['Appearance & Themes','Personalize panel accent colors, dark/light mode, and interface density','Appearance & Themes']
  };
  setHeading(...(headingMap[view]||['Overview','','Overview']));
- document.body.dataset.view=view;content.innerHTML='<div class="loading-state">Loading your workspace…</div>';if(view==='overview')await overview(id);if(view==='applications')await applicationsPage(id);if(view==='docker')await docker(id);if(view==='monitoring')await monitoringPage();if(view==='system')await system();if(view==='websites')await websitesPage(id);if(view==='databases')await databasesPage(id);if(view==='tasks')await tasksPage();if(view==='users')await users();if(view==='waf')await securityCenterPage();if(view==='appearance')await appearancePage();}catch(e){if(id!==generation)return;if(e.status===401){await login();}else{content.innerHTML=`<div class="card">${empty('Unable to load this section',e.message,'info')}</div>`;notify(e.message);}}}
+ document.body.dataset.view=view;content.innerHTML='<div class="loading-state">Loading your workspace…</div>';if(view==='overview')await overview(id);if(view==='applications'){view='websites';await websitesPage(id);}if(view==='docker')await docker(id);if(view==='monitoring')await monitoringPage();if(view==='system')await system();if(view==='websites')await websitesPage(id);if(view==='databases')await databasesPage(id);if(view==='tasks')await tasksPage();if(view==='users')await users();if(view==='waf')await securityCenterPage();if(view==='appearance')await appearancePage();}catch(e){if(id!==generation)return;if(e.status===401){await login();}else{content.innerHTML=`<div class="card">${empty('Unable to load this section',e.message,'info')}</div>`;notify(e.message);}}}
 const ACCENT_PRESETS=[
  {id:'gold',name:'Imperial Gold (Default)',desc:'Luxury brushed metallic gold & warm amber. Mission-control elegance with maximum readability.',primary:'#f59e0b',gradient:'linear-gradient(135deg, #f59e0b, #d97706)'},
  {id:'emerald',name:'Cyber Emerald',desc:'High-tech terminal emerald green. Matrix & hacker aesthetic.',primary:'#10b981',gradient:'linear-gradient(135deg, #10b981, #059669)'},

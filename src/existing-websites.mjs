@@ -1,3 +1,4 @@
+import {maskSecrets} from './applications.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -20,7 +21,26 @@ export function createExistingWebsites({dataDir,discover,describe,reload,execute
  async function prepareFiles(id,b){return locked(async()=>{const c=await context(id);if(c.revision!==b.revision)throw bad('Routing changed; refresh before preparing files',409);if(c.s.type!=='Static'&&!c.s.isAlgo)throw bad('This website uses an upstream application; manage its files in Docker');let dir=c.e.wwwDirectory;for(const part of ['server-panel-existing',id,'public']){dir=path.join(dir,part);try{await fs.mkdir(dir,{mode:0o755});}catch(e){if(e.code!=='EEXIST')throw e;}if(await confined(c.e.wwwDirectory,path.relative(c.e.wwwDirectory,dir))!==dir)throw bad('Website files path must not contain symbolic links');}const metadata=path.join(state,id);await fs.mkdir(metadata,{recursive:true,mode:0o700});await fs.writeFile(path.join(metadata,'files.json'),JSON.stringify({engine:engineKey(c.e),root:dir}),{mode:0o600});return {prepared:true};});}
  async function activateFiles(id,b){const c=await context(id);if(c.s.type!=='Static'&&!c.s.isAlgo)throw bad('Only static website document roots can be switched here');const root=await preparedRoot(c);const entries=await fs.readdir(root);if(!entries.some(n=>!n.startsWith('.')))throw bad('Upload or create website files before activating this folder');const main=c.files[0],matches=[...main.text.matchAll(/^\s*root\s+[^;]+;/gm)];if(matches.length!==1)throw bad('Use Routing configuration to choose the correct location-specific document root');const target=path.posix.join(c.e.wwwDestination,path.relative(c.e.wwwDirectory,root).split(path.sep).join('/'));const text=main.text.replace(/^([ \t]*)root\s+[^;]+;/m,(_,space)=>space+'root '+target+';');return changeConfig(id,{file:main.key,revision:b.revision,text});}
  async function certificatePair(c){const values=name=>[...new Set([...c.s.combined.matchAll(new RegExp('^\\s*'+name+'\\s+([A-Za-z0-9_./-]+)\\s*;','gm'))].map(m=>m[1]))];const certs=values('ssl_certificate'),keys=values('ssl_certificate_key');if(certs.length!==1||keys.length!==1)throw bad('A single existing certificate/key pair is required');const map=async value=>{if(!value.startsWith(c.e.wwwDestination+'/'))throw bad('Certificate is outside the detected website storage');const file=await confined(c.e.wwwDirectory,value.slice(c.e.wwwDestination.length+1));await regular(file);return file;};const cert=await map(certs[0]),key=await map(keys[0]);if(cert===key)throw bad('Certificate and key must be distinct files');const shared=(await scan(c.e)).some(s=>s.id!==c.s.id&&[...s.combined.matchAll(/^\s*ssl_certificate(?:_key)?\s+([^;]+);/gm)].some(m=>[certs[0],keys[0]].includes(m[1].trim())));if(shared)throw bad('Certificate files are shared by another website. Replace them through a coordinated certificate workflow.');return {cert,key,revision:digest((await fs.readFile(cert)).toString()+(await fs.readFile(key)).toString())};}
- async function details(id){const c=await context(id);let fileRoot=null,servingRoot=null;try{servingRoot=await directRoot(c);}catch{}try{fileRoot=await documentRoot(c);}catch{}const text=c.s.combined;let pair=null,certificateNote='';try{pair=await certificatePair(c);}catch(e){certificateNote=e.message;}const isAlgo=c.s.domains?.some(d=>d.includes('algo'))||text.includes(':5000');const nativeService=isAlgo?{unit:'openalgo.service',description:'OpenAlgo Python Trading Server',active:true,status:'running',workingDirectory:'/home/cyber/Downloads/openalgo',port:5000}:null;const detectedStack=isAlgo?{type:'Hybrid (Python Backend + Node.js/React Frontend)',backend:'Python 3.12 (Flask with eventlet / Werkzeug / Gunicorn, app.py, .venv)',frontend:'React 19, TypeScript, Vite, Tailwind CSS, TanStack Query (frontend/dist/)',dist:'frontend/dist',workingDirectory:'/home/cyber/Downloads/openalgo',role:'Python backend core engine on port 5000 serving built React UI from frontend/dist/'}:null;return {filesStaged:!!fileRoot&&!servingRoot,certificateNote,certificateReplaceAvailable:!!pair,tlsRevision:pair?.revision||null,...Object.fromEntries(Object.entries(c.s).filter(([k])=>!['combined','related','name'].includes(k))),type:isAlgo?'Hybrid':'static',kind:isAlgo?'Hybrid (Python + React)':c.s.type,state:c.s.enabled?'published':'stopped',fileRoot,nativeService,detectedStack,envNames:[],pending:false,archived:false,revision:c.revision,engine:c.e.name,listen:[...text.matchAll(/^\s*listen\s+([^;]+);/gm)].map(m=>m[1]),upstreams:[...text.matchAll(/^\s*(?:proxy_pass|fastcgi_pass)\s+([^;]+);/gm)].map(m=>m[1].replace(/\/\/[^/@\s]+:[^/@\s]+@/,'//[credentials]@')),certificatePaths:[...text.matchAll(/^\s*ssl_certificate\s+([^;]+);/gm)].map(m=>m[1]),configFiles:c.files.map(f=>({key:f.key,path:f.file,revision:f.revision,text:hidden(f.text),editable:hidden(f.text)===f.text})),command:isAlgo?'openalgo.service (/home/cyber/Downloads/openalgo/.venv/bin/python app.py)':'Existing website document root'};}
+ async function details(id){const c=await context(id);let fileRoot=null,servingRoot=null;try{servingRoot=await directRoot(c);}catch{}try{fileRoot=await documentRoot(c);}catch{}const text=c.s.combined;let pair=null,certificateNote='';try{pair=await certificatePair(c);}catch(e){certificateNote=e.message;}const isAlgo=c.s.domains?.some(d=>d.includes("algo"))||text.includes(":5000");
+  const workingDir = isAlgo ? "/home/cyber/Downloads/openalgo" : (c.s.domains?.some(d=>d.includes("cyber.")) ? "/opt/server-panel/app" : null);
+  let detectedConfigs = [];
+  if (workingDir) {
+    const candidates = [".env", ".sample.env", "app.py", "main.py", "pyproject.toml", "requirements.txt", "frontend/package.json", "frontend/vite.config.ts", "package.json", "compose.yml", "compose.yaml", "Dockerfile"];
+    for (const rel of candidates) {
+      try {
+        const full = path.join(workingDir, rel);
+        const st = await fs.stat(full);
+        if (st.isFile()) detectedConfigs.push({ name: rel, path: full, size: st.size, type: rel.includes(".env") ? "env" : rel.endsWith(".json") ? "json" : rel.endsWith(".py") ? "python" : "config" });
+      } catch {}
+    }
+  }
+  if (isAlgo) {
+    detectedConfigs.push({ name: "openalgo.service (systemd unit)", path: "/etc/systemd/system/openalgo.service", size: (await fs.stat("/etc/systemd/system/openalgo.service").catch(()=>({size:0}))).size, type: "systemd" });
+    detectedConfigs.push({ name: "vpn.conf (systemd drop-in)", path: "/etc/systemd/system/openalgo.service.d/vpn.conf", size: (await fs.stat("/etc/systemd/system/openalgo.service.d/vpn.conf").catch(()=>({size:0}))).size, type: "systemd" });
+  }
+  if (c.s.configuration) {
+    detectedConfigs.push({ name: path.basename(c.s.configuration) + " (Nginx vhost)", path: c.s.configuration, size: (await fs.stat(c.s.configuration).catch(()=>({size:0}))).size, type: "nginx" });
+  }const nativeService=isAlgo?{unit:'openalgo.service',description:'OpenAlgo Python Trading Server',active:true,status:'running',workingDirectory:'/home/cyber/Downloads/openalgo',port:5000}:null;const detectedStack=isAlgo?{type:'Hybrid (Python Backend + Node.js/React Frontend)',backend:'Python 3.12 (Flask with eventlet / Werkzeug / Gunicorn, app.py, .venv)',frontend:'React 19, TypeScript, Vite, Tailwind CSS, TanStack Query (frontend/dist/)',dist:'frontend/dist',workingDirectory:'/home/cyber/Downloads/openalgo',role:'Python backend core engine on port 5000 serving built React UI from frontend/dist/'}:null;return {filesStaged:!!fileRoot&&!servingRoot,certificateNote,certificateReplaceAvailable:!!pair,tlsRevision:pair?.revision||null,...Object.fromEntries(Object.entries(c.s).filter(([k])=>!['combined','related','name'].includes(k))),type:isAlgo?'Hybrid':'static',kind:isAlgo?'Hybrid (Python + React)':c.s.type,state:c.s.enabled?'published':'stopped',fileRoot,nativeService,detectedStack,detectedConfigs,envNames:[],pending:false,archived:false,revision:c.revision,engine:c.e.name,listen:[...text.matchAll(/^\s*listen\s+([^;]+);/gm)].map(m=>m[1]),upstreams:[...text.matchAll(/^\s*(?:proxy_pass|fastcgi_pass)\s+([^;]+);/gm)].map(m=>m[1].replace(/\/\/[^/@\s]+:[^/@\s]+@/,'//[credentials]@')),certificatePaths:[...text.matchAll(/^\s*ssl_certificate\s+([^;]+);/gm)].map(m=>m[1]),configFiles:c.files.map(f=>({key:f.key,path:f.file,revision:f.revision,text:hidden(f.text),editable:hidden(f.text)===f.text})),command:isAlgo?'openalgo.service (/home/cyber/Downloads/openalgo/.venv/bin/python app.py)':'Existing website document root'};}
  async function atomic(file,text,mode){const st=await regular(file),tmp=path.join(path.dirname(file),'.panel-change-'+crypto.randomUUID());try{await fs.writeFile(tmp,text,{flag:'wx',mode:mode??(st.mode&0o777)});if(process.getuid?.()===0)await fs.chown(tmp,st.uid,st.gid);await fs.rename(tmp,file);}finally{await fs.rm(tmp,{force:true});}}
  async function backup(id,file,text,kind){const dir=path.join(state,id,'history'),key=crypto.randomUUID();await fs.mkdir(dir,{recursive:true,mode:0o700});await fs.writeFile(path.join(dir,key+'.text'),text,{flag:'wx',mode:0o600});await fs.writeFile(path.join(dir,key+'.json'),JSON.stringify({id:key,path:file,kind,time:new Date().toISOString()}),{flag:'wx',mode:0o600});return key;}
  async function changeConfig(id,b){return locked(async()=>{const c=await context(id);if(c.revision!==b.revision)throw bad('Website configuration changed; reload before saving',409);const changes=b.changes||[{file:b.file,text:b.text}];if(!Array.isArray(changes)||!changes.length||changes.length>10||new Set(changes.map(x=>x.file)).size!==changes.length)throw bad('Choose distinct website configuration files');const updates=changes.map(change=>{const f=c.files.find(f=>f.key===change.file);if(!f)throw bad('Choose a detected website configuration file');if(hidden(f.text)!==f.text)throw bad('This configuration contains protected secret values and is read-only');if(typeof change.text!=='string'||Buffer.byteLength(change.text)>1024*1024||change.text.includes('\0'))throw bad('Choose a text configuration smaller than 1 MiB');return {...f,next:change.text};});const backups=[];for(const f of updates)backups.push(await backup(id,f.file,f.text,'config'));try{for(const f of updates)await atomic(f.file,f.next);if(c.s.enabled)await reload(c.e);}catch{let restored=true;for(const f of updates)try{await atomic(f.file,f.text);}catch{restored=false;}try{if(c.s.enabled)await reload(c.e);}catch{restored=false;}if(!restored)throw bad('Configuration rollback needs attention: one or more files or the web-engine reload could not be restored.');throw bad('The web engine rejected the change. The previous configuration was restored.');}return {saved:true,backup:backups[0],applied:c.s.enabled};});}
@@ -34,5 +54,57 @@ export function createExistingWebsites({dataDir,discover,describe,reload,execute
  async function restore(id,key,revision){if(typeof key!=='string'||!/^[a-f0-9-]{36}$/.test(key))throw bad('Invalid saved version');const record=JSON.parse(await fs.readFile(path.join(state,id,'history',key+'.json'),'utf8')),text=await fs.readFile(path.join(state,id,'history',key+'.text'),'utf8');if(record.kind==='file'){const current=await readFile(id,record.path);return saveFile(id,{path:record.path,text,revision:current.revision});}const c=await context(id),file=c.files.find(f=>f.file===record.path||f===c.files[0]&&path.basename(f.file).replace(/\.panel-disabled$/,'')===path.basename(record.path).replace(/\.panel-disabled$/,''));if(!file)throw bad('The configuration is no longer associated with this website');return changeConfig(id,{file:file.key,revision,text});}
  async function certificate(id,b){return locked(async()=>{const c=await context(id);if(c.revision!==b.revision)throw bad('Routing changed; reload before replacing the certificate',409);const pair=await certificatePair(c);if(pair.revision!==b.tlsRevision)throw bad('Certificate changed; reload before replacing it',409);if(typeof b.certificate!=='string'||typeof b.privateKey!=='string'||b.certificate.length>100000||b.privateKey.length>30000)throw bad('Provide a PEM certificate chain and private key');let cert,key;try{cert=new crypto.X509Certificate(b.certificate);key=crypto.createPrivateKey(b.privateKey);}catch{throw bad('Invalid PEM certificate or private key');}if(!crypto.createPublicKey(key).export({type:'spki',format:'der'}).equals(cert.publicKey.export({type:'spki',format:'der'})))throw bad('Certificate and private key do not match');if(new Date(cert.validFrom)>new Date()||new Date(cert.validTo)<=new Date())throw bad('Certificate is expired or not valid yet');if(c.s.domains.some(d=>!cert.checkHost(d.startsWith('*.')?'probe.'+d.slice(2):d)))throw bad('Certificate must cover every website domain');const originalCert=await fs.readFile(pair.cert,'utf8'),originalKey=await fs.readFile(pair.key,'utf8');await backup(id,pair.cert,originalCert,'tls');await backup(id,pair.key,originalKey,'tls');try{await atomic(pair.cert,b.certificate,0o644);await atomic(pair.key,b.privateKey,0o600);if(c.s.enabled)await reload(c.e);}catch{await atomic(pair.cert,originalCert,0o644);await atomic(pair.key,originalKey,0o600);try{if(c.s.enabled)await reload(c.e);}catch{throw bad('Previous certificate files restored; web-engine reload failed');}throw bad('Certificate replacement failed. Previous certificate files restored.');}return {saved:true,expires:cert.validTo};});}
  async function logs(id,kind){if(!['access','error'].includes(kind))return {output:'This existing website uses its original runtime. Manage its application container under Docker.'};const c=await context(id),m=c.s.combined.match(new RegExp('^\\s*'+kind+'_log\\s+([A-Za-z0-9_./-]+)','m'));if(!m)return {output:'No file-based '+kind+' log was detected in this website configuration.'};if(!m[1].startsWith(c.e.wwwDestination+'/'))return {output:'The log is outside the detected website storage mount.'};const file=await confined(c.e.wwwDirectory,m[1].slice(c.e.wwwDestination.length+1));await regular(file);return {output:(await execute('tail',['-n','200','--',file])).slice(-64000)};}
- return {inventory,details,changeConfig,lifecycle,files,readFile,saveFile,history,restore,logs,certificate,prepareFiles,activateFiles,settings};
+ async function readConfigFile(id, targetPath, unmask = false) {
+    const d = await details(id);
+    const matched = d.detectedConfigs?.find(cf => cf.name === targetPath || cf.path === targetPath);
+    let resolved = matched?.path;
+    if (!resolved && d.fileRoot) {
+      const p = path.resolve(d.fileRoot, targetPath);
+      if (p.startsWith(path.resolve(d.fileRoot))) resolved = p;
+    }
+    if (!resolved) throw bad("Configuration file not found or outside website scope", 404);
+    let text = "";
+    try {
+      text = await fs.readFile(resolved, "utf8");
+    } catch (e) {
+      if (e.code === "EACCES") {
+        text = "# Protected Configuration File (" + e.message + ")\n# Administrator permissions are required to read this file.";
+      } else {
+        throw e;
+      }
+    }
+    let isMasked = false;
+    if (!unmask && (resolved.includes(".env") || resolved.endsWith(".conf") || resolved.endsWith(".yml") || resolved.endsWith(".yaml"))) {
+      const masked = maskSecrets(text);
+      if (masked !== text) {
+        text = masked;
+        isMasked = true;
+      }
+    }
+    return { ok: true, name: path.basename(resolved), path: resolved, content: text, size: Buffer.byteLength(text, "utf8"), isMasked };
+  }
+
+  async function serviceLogs(id, lines = 100) {
+    const d = await details(id);
+    if (d.nativeService?.unit) {
+      try {
+        const out = await execute("journalctl", ["-u", d.nativeService.unit, "-n", String(lines || 100), "--no-pager"]);
+        return { ok: true, unit: d.nativeService.unit, logs: out || "No logs recorded." };
+      } catch (err) {
+        return { ok: false, error: err.message, logs: "Failed to retrieve logs: " + err.message };
+      }
+    }
+    return { ok: false, logs: "No native service unit associated with this website." };
+  }
+
+  async function serviceRestart(id) {
+    const d = await details(id);
+    if (d.nativeService?.unit) {
+      await execute("systemctl", ["restart", d.nativeService.unit]);
+      return { ok: true, message: "Service " + d.nativeService.unit + " restarted successfully." };
+    }
+    throw bad("No native service unit associated with this website");
+  }
+
+  return {inventory,details,changeConfig,lifecycle,files,readFile,saveFile,history,restore,logs,certificate,prepareFiles,activateFiles,settings,readConfigFile,serviceLogs,serviceRestart};
 }
