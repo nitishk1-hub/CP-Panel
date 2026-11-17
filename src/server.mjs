@@ -496,7 +496,7 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
         if(req.method==='GET'&&endpoint==='status')return send(200,await wireguard.inventory());
         if(req.method==='GET'&&endpoint==='config')return send(200,await wireguard.config(name));
         if(req.method==='POST'){const b=await body(req);if(b.confirm!==true)throw bad('Review and confirm the WireGuard operation');
-          if(endpoint==='draft'){const result=await wireguard.save(b.interface,b);await audit('wireguard.draft.saved');return send(200,result);}
+          if(endpoint==='draft'){if(b.discard){const result=await wireguard.discardDraft(b.interface);await audit('wireguard.draft.discarded');return send(200,result);}const result=await wireguard.save(b.interface,b);await audit('wireguard.draft.saved');return send(200,result);}
           if(endpoint==='action'){await audit('wireguard.action.requested');return send(200,await wireguard.transaction(b.interface,b));}
           if(endpoint==='confirm'){const result=await wireguard.confirm(b.id);await audit('wireguard.change.confirmed');return send(200,result);}
           if(endpoint==='rollback'){const result=await wireguard.rollback(b.id);await audit('wireguard.change.rolled-back');return send(200,result);}
