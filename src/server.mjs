@@ -44,9 +44,10 @@ import {createAcmeClient} from './acme-ssl.mjs';
 import {createCronManager} from './cron-manager.mjs';
 import {createNotifications} from './notifications.mjs';
 import {handleApt,handleGit,handleDockerBuild,handleSecurityInspect,handleNetworkInspect,handleTestRunner,handleProjectRead,handleProjectEdit,handleSecrets,handleDeploy,handleDockerSecurityInspect,handleLogsCorrelate,handleSecurityScan,handleBackup,handleWafVerify,handleAppInventory} from './ai-operations.mjs';
+import {scanApplications,getApplicationConfig,getApplicationLogs,restartApplication} from './applications.mjs';
 import {tools,toolScope} from './mcp-tools.mjs';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const assets=new Map([['/security-center.js',['security-center.js','text/javascript']],['/security-map.js',['security-map.js','text/javascript']],['/security-map-worker.js',['security-map-worker.js','text/javascript']],['/security-map.css',['security-map.css','text/css']],['/tasks.js',['tasks.js','text/javascript']],['/databases.js',['databases.js','text/javascript']],['/security-world.svg',['security-world.svg','image/svg+xml']],['/',['index.html','text/html']],['/app.js',['app.js','text/javascript']],['/third-party-notices.txt',['third-party-notices.txt','text/plain']],['/network-system.js',['network-system.js','text/javascript']],['/websites.js',['websites.js','text/javascript']],['/system-tools.js',['system-tools.js','text/javascript']],['/tools-bundle.js',['tools-bundle.js','text/javascript']],['/xterm.css',['xterm.css','text/css']],['/host-overview.js',['host-overview.js','text/javascript']],['/docker-workspace.js',['docker-workspace.js','text/javascript']],['/style.css',['style.css','text/css']]]);
+const assets=new Map([['/applications.js',['applications.js','text/javascript']],['/security-center.js',['security-center.js','text/javascript']],['/security-map.js',['security-map.js','text/javascript']],['/security-map-worker.js',['security-map-worker.js','text/javascript']],['/security-map.css',['security-map.css','text/css']],['/tasks.js',['tasks.js','text/javascript']],['/databases.js',['databases.js','text/javascript']],['/security-world.svg',['security-world.svg','image/svg+xml']],['/',['index.html','text/html']],['/app.js',['app.js','text/javascript']],['/third-party-notices.txt',['third-party-notices.txt','text/plain']],['/network-system.js',['network-system.js','text/javascript']],['/websites.js',['websites.js','text/javascript']],['/system-tools.js',['system-tools.js','text/javascript']],['/tools-bundle.js',['tools-bundle.js','text/javascript']],['/xterm.css',['xterm.css','text/css']],['/host-overview.js',['host-overview.js','text/javascript']],['/docker-workspace.js',['docker-workspace.js','text/javascript']],['/style.css',['style.css','text/css']]]);
 export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join(root,'var'),port=8787,fileRoot=process.env.PANEL_FILE_ROOT||'/',dockerMaintenance=createDockerMaintenance(),dockerWorkspace,cloudflareService,grafanaService,hostService,websiteService,wireguardService,automaticVerification=true,readinessService,registryService,wafService,networkGuardService,networkIDSService,threatSecurityService,databaseService,taskService,securityCenterService,panelAccessRequest,webEngineService}={}) {
   await fs.mkdir(dataDir,{recursive:true,mode:0o700});
   if(process.env.PANEL_REQUIRE_SETUP==='1'){let seeded;try{seeded=JSON.parse(await fs.readFile(path.join(dataDir,'users.json'),'utf8'));}catch{}if(!Array.isArray(seeded)||!seeded.some(u=>u.enabled&&u.role==='admin'&&(u.authSource||'local')==='local'&&!u.mustChangePassword))throw new Error('Complete the installer before starting the production service.');}
@@ -250,6 +251,28 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
         if(endpoint==='/waf-verify'){admin();const b=req.method==='POST'?await body(req):Object.fromEntries(url.searchParams);return send(200,await handleWafVerify(b));}
         if(endpoint==='/app-inventory'){admin();return send(200,await handleAppInventory());}
         throw bad('Unknown operation endpoint',404);
+      }
+      if(url.pathname.startsWith('/api/applications')){
+        admin();
+        if(req.method==='GET'&&url.pathname==='/api/applications')return send(200,await scanApplications());
+        if(req.method==='GET'&&url.pathname==='/api/applications/config'){
+          const id=url.searchParams.get('id'),file=url.searchParams.get('file'),unmask=url.searchParams.get('unmask')==='true';
+          if(!id||!file)throw bad('id and file parameters are required');
+          return send(200,await getApplicationConfig(id,file,unmask));
+        }
+        if(req.method==='GET'&&url.pathname==='/api/applications/logs'){
+          const id=url.searchParams.get('id'),lines=url.searchParams.get('lines')||100;
+          if(!id)throw bad('id parameter is required');
+          return send(200,await getApplicationLogs(id,lines));
+        }
+        if(req.method==='POST'&&url.pathname==='/api/applications/restart'){
+          const b=await body(req);
+          if(b.confirm!==true)throw bad('Confirm application restart');
+          if(!b.id)throw bad('id is required');
+          await audit('application.restart.'+b.id);
+          return send(200,await restartApplication(b.id));
+        }
+        throw bad('Unknown applications endpoint',404);
       }
       if(req.method==='POST'&&url.pathname==='/api/ai/command'){admin();const b=await body(req);if(b.confirm!==true||typeof b.command!=='string'||!b.command.trim()||b.command.length>16384||b.command.includes('\0'))throw bad('Review and confirm a valid shell command');await audit('ai.command.requested');return send(202,jobs.start('AI host command',log=>runAICommand(b,log)));}
       if(url.pathname==='/api/databases'||url.pathname.startsWith('/api/databases/')){admin();const endpoint=url.pathname.slice('/api/databases'.length);
