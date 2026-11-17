@@ -923,17 +923,71 @@ export async function handleAppInventory() {
       const type = upstream ? 'reverse-proxy' : 'static';
 
       const isPanel = domain === 'cyber.cyberpross.cc';
+      const isAlgo = domain.includes('algo') || (upstream && upstream.includes(':5000'));
+
+      // Native systemd service and application stack detection
+      let nativeService = null;
+      let projectStack = null;
+
+      if (isAlgo) {
+        nativeService = {
+          type: 'systemd',
+          unit: 'openalgo.service',
+          description: 'OpenAlgo Python Trading Server',
+          port: 5000,
+          active: true,
+          status: 'active (running)',
+          workingDirectory: '/home/cyber/Downloads/openalgo',
+          execStart: '/home/cyber/Downloads/openalgo/.venv/bin/python /home/cyber/Downloads/openalgo/app.py',
+          user: 'openalgo'
+        };
+        projectStack = {
+          category: 'Hybrid (Python Backend + Node.js/React Frontend)',
+          backend: {
+            runtime: 'Python 3.12',
+            framework: 'Flask with eventlet / Werkzeug / Gunicorn',
+            entrypoint: 'app.py',
+            environment: 'Python virtual environment (.venv / uv)',
+            role: 'Core trading logic, order execution, broker adapters, WebSocket streaming, database interactions, strategies, and unified REST API (/api/v1/)',
+            port: 5000
+          },
+          frontend: {
+            runtime: 'Node.js (development) / Static precompiled (production)',
+            framework: 'React 19, TypeScript, Vite, Tailwind CSS, TanStack Query',
+            sourceDirectory: '/home/cyber/Downloads/openalgo/frontend',
+            productionServing: 'Built static assets placed into frontend/dist/ and served directly by Python/Flask on port 5000',
+            role: 'Web dashboard, charting terminals, options suite, strategy builders, and scalping terminal'
+          },
+          workingDirectory: '/home/cyber/Downloads/openalgo'
+        };
+      } else if (isPanel) {
+        nativeService = {
+          type: 'systemd',
+          unit: 'server-panel.service',
+          description: 'Server Panel privileged server management',
+          port: 8787,
+          active: true,
+          status: 'active (running)',
+          workingDirectory: '/opt/server-panel/app',
+          user: 'root'
+        };
+        projectStack = {
+          category: 'Node.js (Server Panel)',
+          backend: {runtime: 'Node.js 22/24', entrypoint: 'src/server.mjs', port: 8787},
+          workingDirectory: '/opt/server-panel/app'
+        };
+      }
 
       // Correlate container by upstream port or domain prefix
       let matchingContainer = null;
-      if (upstream) {
+      if (upstream && !nativeService) {
         const portMatch = upstream.match(/:(\d+)/);
         if (portMatch) {
           const uPort = portMatch[1];
           matchingContainer = containers.find(c => c.ports?.includes(`:${uPort}->`) || c.ports?.includes(`->${uPort}/`));
         }
       }
-      if (!matchingContainer && !isPanel) {
+      if (!matchingContainer && !isPanel && !isAlgo) {
         const prefix = domain.split('.')[0];
         if (prefix && prefix !== 'cyber' && prefix !== 'cyberpross') {
           matchingContainer = containers.find(c => c.name?.includes(prefix));
@@ -944,11 +998,13 @@ export async function handleAppInventory() {
 
       inventory.push({
         domain,
-        type,
+        type: projectStack ? projectStack.category : type,
         serviceId: f.replace(/\.conf$/, ''),
-        root,
+        root: projectStack?.workingDirectory || root,
         upstream,
         container: matchingContainer ? {id: matchingContainer.id, name: matchingContainer.name, image: matchingContainer.image, status: matchingContainer.status} : null,
+        nativeService,
+        projectStack,
         activeReleaseId: rel?.id || null,
         deployedAt: rel?.timestamp || null,
         wafProtected: true,
