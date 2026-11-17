@@ -89,7 +89,7 @@ function restoreRouteState(){
 }
 let modalReturnFocus;
 modal.addEventListener('close',()=>{if(modalReturnFocus?.isConnected)modalReturnFocus.focus({preventScroll:true});});
-function openModal(title,body,extraClass=''){if(!modal.open)modalReturnFocus=document.activeElement;modal.className='modal '+extraClass;modal.innerHTML=`<div class="modal-head"><h2 id="modal-title">${esc(title)}</h2><button id="modal-close" class="icon-button" aria-label="Close">${icon('close')}</button></div>${body}`;bind('modal-close',()=>modal.close());if(!modal.open)modal.showModal();requestAnimationFrame(()=>{if(!modal.open)return;const first=modal.querySelector('input:not([type=hidden]):not([disabled]),textarea:not([disabled]),select:not([disabled]),#confirm-cancel');if(first)first.focus({preventScroll:true});});}
+function openModal(title,body,extraClass=''){if(!modal.open)modalReturnFocus=document.activeElement;modal.className='modal '+extraClass;modal.innerHTML=`<div class="modal-head"><h2 id="modal-title">${esc(title)}</h2><button id="modal-close" class="icon-button" aria-label="Close">${icon('close')}</button></div>${body}`;bind('modal-close',()=>modal.close());modal.querySelectorAll('[data-modal-close]').forEach(b=>b.onclick=()=>modal.close());if(!modal.open)modal.showModal();requestAnimationFrame(()=>{if(!modal.open)return;const first=modal.querySelector('input:not([type=hidden]):not([disabled]),textarea:not([disabled]),select:not([disabled]),#confirm-cancel');if(first)first.focus({preventScroll:true});});}
 function confirmOperation(title,description,label='Continue'){return new Promise(resolve=>{openModal(title,`<div class="modal-body"><p>${esc(description)}</p></div><div class="form-actions">${button('confirm-cancel','Cancel',null)}${button('confirm-go',label,null,/delete|remove|stop|restart|reset|publish|deploy|apply|clean|restore/i.test(title)?'danger':'primary')}</div>`);const finish=v=>{modal.close();resolve(v);};bind('confirm-cancel',()=>finish(false));bind('modal-close',()=>finish(false));bind('confirm-go',()=>finish(true));modal.addEventListener('cancel',()=>resolve(false),{once:true});});}
 function metricCard(name,title,tone){return `<div class="card metric"><div class="metric-top"><span>${title}</span><span class="metric-icon ${tone}">${icon(name)}</span></div><div class="metric-value" id="${name}-value">—</div><div class="meter"><div class="meter-fill ${tone}" id="${name}-bar"></div></div><div class="metric-foot" id="${name}-detail">Reading host data…</div></div>`;}
 function chartMarkup(){const width=Math.max(300,Math.floor($('#resource-chart')?.clientWidth||720)),height=225,left=38,right=width-16,top=20,bottom=191;const line=key=>samples.map((m,i)=>`${i?'L':'M'}${left+(right-left)*i/Math.max(59,samples.length-1)},${bottom-(bottom-top)*percent(m[key])/100}`).join(' ');const cpu=line('cpu'),ram=line('ram');const last=samples.at(-1);return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="CPU and RAM usage from measurements collected while this page is open">${[0,25,50,75,100].map(p=>`<path class="chart-grid" d="M${left} ${bottom-(bottom-top)*p/100}H${right}"/><text class="chart-label" x="5" y="${bottom-(bottom-top)*p/100+3}">${p}%</text>`).join('')}${samples.length>1?`<path class="chart-area" d="${cpu} L${left+(right-left)*(samples.length-1)/Math.max(59,samples.length-1)},${bottom}H${left}Z"/><path class="chart-cpu" d="${cpu}"/><path class="chart-ram" d="${ram}"/>`:''}${samples.length===1?`<circle cx="${left}" cy="${bottom-(bottom-top)*last.cpu/100}" r="3" fill="#5278ed"/>`:''}<text class="chart-label" x="${left}" y="219">${samples.length?new Date(samples[0].time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):''}</text><text class="chart-label" text-anchor="end" x="${right}" y="219">${samples.length>1?new Date(last.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Collecting live samples'}</text></svg>`;}
@@ -529,7 +529,7 @@ function openDeployAppModal(app){
       <p class="form-error" role="alert"></p>
     </div>
     <div class="form-actions">
-      <button type="button" class="button secondary" onclick="modal.close()">Cancel</button>
+      <button type="button" class="button secondary" data-modal-close="true">Cancel</button>
       <button type="submit" class="button primary">${icon('plus')}Deploy Stack</button>
     </div>
   </form>`,'editor');
@@ -688,7 +688,7 @@ async function cronPage(){
           <p class="form-error" role="alert"></p>
         </div>
         <div class="form-actions">
-          <button type="button" class="button secondary" onclick="modal.close()">Cancel</button>
+          <button type="button" class="button secondary" data-modal-close="true">Cancel</button>
           <button type="submit" class="button primary">Create Task</button>
         </div>
       </form>`);
@@ -1240,7 +1240,7 @@ async function notificationsPage(tab=notifActiveTab){
         <p class="field-help">Payloads are dispatched via HTTP POST in JSON format with <code>event</code>, <code>title</code>, <code>message</code>, <code>severity</code>, and <code>timestamp</code> fields. If a Secret Header is configured, it is transmitted in the <code>X-Panel-Secret</code> header.</p>
       </div>
       <div class="form-actions">
-        <button class="button secondary" type="button" onclick="modal.close()">Close</button>
+        <button class="button secondary" type="button" data-modal-close="true">Close</button>
       </div>
     `));
   }catch(e){
@@ -1284,6 +1284,18 @@ function initAiAssistant(){
     };
   });
 
+  if(messagesEl){
+    messagesEl.addEventListener('click',e=>{
+      const btn=e.target.closest('[data-ai-action]');
+      if(!btn) return;
+      const act=btn.dataset.aiAction;
+      if(act==='waf') route('waf');
+      if(act==='docker-containers'){dockerTab='containers';route('docker');}
+      if(act==='docker-apps'){dockerTab='apps';route('docker');}
+      if(act==='system-backups'){sub='backups';route('system');}
+    });
+  }
+
   formEl.onsubmit=async e=>{
     e.preventDefault();
     if(!me||!me.username||document.body.classList.contains('auth-mode')) return;
@@ -1325,7 +1337,7 @@ function initAiAssistant(){
             • Coraza WAF Gateway: <strong>${s.engines?.protection?.healthy?'Active & Healthy':'Degraded'}</strong><br>
             • Active CrowdSec Bans: <strong>${s.engines?.crowdsec?.decisions?.length||0}</strong><br>
             • Geolocation Threat Origins: <strong>${s.locations?.length||0} countries</strong><br>
-            <button class="button secondary small" style="margin-top:6px" onclick="route('waf')">Open Security Center</button>`;
+            <button class="button secondary small" style="margin-top:6px" data-ai-action="waf">Open Security Center</button>`;
         } else {
           replyText='Security telemetry currently unavailable.';
         }
@@ -1336,7 +1348,7 @@ function initAiAssistant(){
           replyText=`📦 <strong>Docker Containers (${running.length} running / ${d.containers.length} total):</strong><br>`+
             d.containers.slice(0,6).map(c=>`• <code>${esc(c.Names)}</code>: ${c.State==='running'?'<span style="color:var(--green)">running</span>':'<span style="color:var(--muted)">stopped</span>'} (${esc(c.Status)})`).join('<br>')+
             (d.containers.length>6?`<br><em>...and ${d.containers.length-6} more</em>`:'')+
-            `<br><button class="button secondary small" style="margin-top:6px" onclick="dockerTab='containers';route('docker')">Manage Containers</button>`;
+            `<br><button class="button secondary small" style="margin-top:6px" data-ai-action="docker-containers">Manage Containers</button>`;
         } else {
           replyText='Docker Engine is not running or accessible.';
         }
@@ -1344,11 +1356,11 @@ function initAiAssistant(){
         const apps=await api('/api/apps/catalog').catch(()=>[]);
         replyText=`🚀 <strong>1-Click Open-Source App Store:</strong><br>`+
           apps.slice(0,5).map(a=>`• <strong>${a.name}</strong> (${a.category}) - ${a.installed?'<span style="color:var(--green)">Installed</span>':'Available'}`).join('<br>')+
-          `<br><button class="button primary small" style="margin-top:6px" onclick="dockerTab='apps';route('docker')">Open App Store</button>`;
+          `<br><button class="button primary small" style="margin-top:6px" data-ai-action="docker-apps">Open App Store</button>`;
       } else if(lowPrompt.includes('backup')||lowPrompt.includes('s3')){
         const b=await api('/api/backup/cloud/list').catch(()=>null);
         replyText=`💾 <strong>S3 Cloud Backups:</strong><br>`+
-          (b?.configured?`• Storage Bucket: <code>${esc(b.bucket)}</code><br>• Stored Snapshots: <strong>${b.items?.length||0}</strong>`:`• S3 storage is not yet configured.<br><button class="button secondary small" style="margin-top:6px" onclick="sub='backups';route('system')">Configure S3</button>`);
+          (b?.configured?`• Storage Bucket: <code>${esc(b.bucket)}</code><br>• Stored Snapshots: <strong>${b.items?.length||0}</strong>`:`• S3 storage is not yet configured.<br><button class="button secondary small" style="margin-top:6px" data-ai-action="system-backups">Configure S3</button>`);
       } else if(lowPrompt.includes('ssl')||lowPrompt.includes('cert')||lowPrompt.includes('https')||lowPrompt.includes('tls')||lowPrompt.includes('tunnel')||lowPrompt.includes('cloudflare')){
         const cf=await api('/api/cloudflare/summary').catch(()=>({health:'Connected',connections:4}));
         replyText=`☁️ <strong>Cloudflare Tunnel Architecture:</strong><br>

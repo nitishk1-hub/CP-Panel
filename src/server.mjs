@@ -77,7 +77,7 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
   const notifications=createNotifications({dataDir});
   cronManager.startScheduler();
   const graphify=createGraphifyBridge({
-    roots:[path.join(root,'graphify-out'),'/home/cyber/Documents/ChatGPT/1PanelServer/graphify-out',path.join(dataDir,'graphify-out')],
+    roots:[path.join(root,'graphify-out'),path.join(dataDir,'graphify-out'),process.env.GRAPHIFY_OUT_DIR].filter(Boolean),
     getDigestContext:async()=>{
       const [m,d,w,g,s]=await Promise.all([
         metrics().catch(()=>null),
@@ -435,7 +435,7 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
         if(req.method==='GET'&&endpoint==='/files')return send(200,await (await siteService.files(id)).listing(url.searchParams.get('path')||'.'));
         if(req.method==='GET'&&endpoint==='/backups')return send(200,isExisting(id)?await websites.existing.history(id,'file',url.searchParams.get('path')):await websites.backups(id,url.searchParams.get('path')));
         if(req.method==='GET'&&endpoint==='/existing/history')return send(200,await websites.existing.history(id,'config'));
-        if(req.method==='GET'&&endpoint==='/existing/config-file')return send(200,await websites.existing.readConfigFile(id,url.searchParams.get('file'),url.searchParams.get('unmask')==='true'));
+        if(req.method==='GET'&&endpoint==='/existing/config-file'){const unmask=url.searchParams.get('unmask')==='true';if(unmask)await audit('website.config.unmasked.'+id+'.'+(url.searchParams.get('file')||''));return send(200,await websites.existing.readConfigFile(id,url.searchParams.get('file'),unmask));}
         if(req.method==='GET'&&endpoint==='/existing/service-logs')return send(200,await websites.existing.serviceLogs(id,url.searchParams.get('lines')));
         if(req.method==='GET'&&endpoint==='/file')return send(200,await siteService.readFile(id,url.searchParams.get('path')));
         if(req.method==='GET'&&endpoint==='/download'){await (await siteService.files(id)).download(url.searchParams.get('path')||'.',res);return;}

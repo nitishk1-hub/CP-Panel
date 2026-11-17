@@ -755,7 +755,8 @@ export async function handleWafVerify({domain, port}) {
     if (cContent.includes('SecRule REMOTE_ADDR "@ipMatch')) crowdsecEnforced = true;
   } catch {}
 
-  const isPanelHost = panelHosts.includes(d) || (cContent && new RegExp(`host\\s+${d.replace(/\./g, '\\.')}\\b`).test(cContent) && cContent.includes('reverse_proxy') && !cContent.includes('coraza_waf'));
+  const escapedDomain = d.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
+  const isPanelHost = panelHosts.includes(d) || (cContent && new RegExp(`host\\s+${escapedDomain}\\b`).test(cContent) && cContent.includes('reverse_proxy') && !cContent.includes('coraza_waf'));
 
   try {
     const accessLog = '/var/lib/cyberpross-coraza/access.json';

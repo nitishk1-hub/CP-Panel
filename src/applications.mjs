@@ -15,7 +15,7 @@ async function runCmd(cmd, args = []) {
 }
 
 // Common sensitive key regex for masking secrets in .env and configuration files
-const SENSITIVE_KEY_REGEX = /([A-Za-z0-9_]*(?:KEY|SECRET|PASSWORD|PASS|PASSWD|TOKEN|CREDENTIAL|PRIVATE|AUTH|SALT|CERT|WEBHOOK)[A-Za-z0-9_]*\s*=\s*)([^\r\n]+)/gi;
+const SENSITIVE_KEY_REGEX = /([A-Za-z0-9_]*(?:KEY|SECRET|PASSWORD|PASS|PASSWD|TOKEN|CREDENTIAL|PRIVATE|AUTH|SALT|CERT|WEBHOOK|URL|URI|DSN)[A-Za-z0-9_]*\s*=\s*)([^\r\n]+)/gi;
 
 export function maskSecrets(content) {
   if (typeof content !== 'string') return content;
@@ -496,6 +496,76 @@ export async function scanApplications() {
       systemdUnit: 'cloudflared.service',
       configs: []
     });
+  }
+
+  // J. Dynamic User Compose Projects
+  const knownAppIds = new Set(applications.map(a => a.id));
+  for (const [projName, proj] of composeProjects.entries()) {
+    if (knownAppIds.has(projName)) continue;
+    const projRoute = nginxRoutes.find(r => r.domain.includes(projName) || proj.containers.some(c => (c.Ports || '').includes(r.upstream)));
+    const projDir = proj.workingDir || (proj.configFile ? path.dirname(proj.configFile) : null);
+    const projConfigs = projDir ? await scanDirectoryConfigs(projDir) : [];
+    if (projRoute?.path) {
+      projConfigs.push({
+        name: 'Nginx Virtual Host',
+        path: projRoute.path,
+        type: 'nginx',
+        size: (await fs.stat(projRoute.path).catch(() => ({ size: 0 }))).size
+      });
+    }
+    const isRunning = proj.containers.some(c => c.State === 'running');
+    applications.push({
+      id: projName,
+      name: projName,
+      badge: 'Docker Compose Stack',
+      category: 'User Application',
+      type: 'compose',
+      runtime: 'Docker Compose',
+      status: isRunning ? 'running' : 'stopped',
+      workingDirectory: projDir,
+      composeFile: proj.configFile,
+      containers: (proj.containers || []).map(c => ({ id: c.ID, name: c.Names, image: c.Image, status: c.Status, state: c.State })),
+      publicUrl: projRoute ? `https://${projRoute.domain}` : null,
+      domain: projRoute?.domain || null,
+      wafStatus: 'OWASP CRS v4 Active',
+      configs: projConfigs
+    });
+    knownAppIds.add(projName);
+  }
+
+  // K. Dynamic User Systemd Services
+  for (const svc of appServices) {
+    const svcId = svc.unit.replace(/\.service$/, '');
+    if (knownAppIds.has(svcId) || svc.unit.startsWith('server-panel-') || svc.unit.startsWith('cyberpross-security')) continue;
+    const svcRoute = nginxRoutes.find(r => r.domain.includes(svcId));
+    const svcDir = svc.WorkingDirectory || null;
+    const svcConfigs = svcDir ? await scanDirectoryConfigs(svcDir) : [];
+    if (svc.FragmentPath) {
+      svcConfigs.push({
+        name: `${svc.unit} (systemd unit)`,
+        path: svc.FragmentPath,
+        type: 'systemd',
+        size: (await fs.stat(svc.FragmentPath).catch(() => ({ size: 0 }))).size
+      });
+    }
+    applications.push({
+      id: svcId,
+      name: svc.Description || svcId,
+      badge: 'Native Service',
+      category: 'User Application',
+      type: 'systemd',
+      runtime: svc.ExecStart || 'Native Service',
+      status: svc.ActiveState === 'active' ? 'running' : 'stopped',
+      pid: svc.MainPID ? parseInt(svc.MainPID, 10) : null,
+      user: svc.User || 'root',
+      workingDirectory: svcDir,
+      systemdUnit: svc.unit,
+      publicUrl: svcRoute ? `https://${svcRoute.domain}` : null,
+      domain: svcRoute?.domain || null,
+      wafStatus: 'OWASP CRS v4 Active',
+      configs: svcConfigs
+    });
+    knownAppIds.add(svcId);
   }
 
   const runningCount = applications.filter(a => a.status === 'running').length;

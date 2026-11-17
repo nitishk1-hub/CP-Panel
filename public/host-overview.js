@@ -28,7 +28,7 @@ async function tunnelPage(){
   try {
     const [s, dnsStatus] = await Promise.all([
       api('/api/cloudflare/status').catch(() => ({health: 'Unknown', metrics: [], connectors: [], configs: []})),
-      api('/api/cloudflare/dns/status').catch(() => ({configured: false, serverIpv4: '120.60.228.219', defaultProxied: true}))
+      api('/api/cloudflare/dns/status').catch(() => ({configured: false, serverIpv4: '', defaultProxied: true}))
     ]);
 
     const edges = (s.metrics || []).reduce((n, m) => n + m.connections, 0);

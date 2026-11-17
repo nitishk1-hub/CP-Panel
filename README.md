@@ -4,7 +4,7 @@
 ### The Enterprise Zero-Trust Linux Server Management & Autonomous AI Control Plane
 
 [![Release: v0.2.0-rc.1](https://img.shields.io/badge/Release-v0.2.0--rc.1-2563eb?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nitishk1-hub/CP-Panel/releases)
-[![Tests Passing: 240/240](https://img.shields.io/badge/Tests-240%2F240_Passing-10b981?style=for-the-badge&logo=vitest&logoColor=white)](tests/)
+[![Tests Passing: 254/254](https://img.shields.io/badge/Tests-254%2F254_Passing-10b981?style=for-the-badge&logo=vitest&logoColor=white)](tests/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-059669?style=for-the-badge&logo=open-source-initiative&logoColor=white)](LICENSE)
 [![Node.js: >=24 LTS](https://img.shields.io/badge/Node.js-%3E%3D24_LTS-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 [![OS: Ubuntu & Debian](https://img.shields.io/badge/OS-Ubuntu_%7C_Debian-e95420?style=for-the-badge&logo=ubuntu&logoColor=white)](docs/INSTALLATION.md)
@@ -136,7 +136,7 @@ cd CP-Panel
 npm ci
 npm run build:tools
 
-# 3. Execute the full test suite (all 240 tests must pass)
+# 3. Execute the full test suite (all 254 tests must pass)
 npm test
 
 # 4. Initialize administrative identity

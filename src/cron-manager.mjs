@@ -104,10 +104,15 @@ export function createCronManager({dataDir, cloudBackup, dockerMaintenance, acme
         const res = await cloudBackup.runBackup({targets: ['panel', 'databases', 'websites']});
         output = JSON.stringify(res);
       } else if (task.type === 'docker_cleanup' && dockerMaintenance) {
-        const res = await exec('docker', ['system', 'prune', '-f', '--volumes']).catch(e => ({stdout: '', stderr: e.message}));
+        const res = await exec('docker', ['system', 'prune', '-f']).catch(e => ({stdout: '', stderr: e.message}));
         output = (res.stdout || res.stderr).slice(-1000);
       } else if (task.type === 'ssl_renew' && acmeClient) {
-        output = 'Checked ACME SSL certificates';
+        if (typeof acmeClient.renewDue === 'function') {
+          const res = await acmeClient.renewDue();
+          output = `ACME certificate check completed: ${JSON.stringify(res)}`;
+        } else {
+          output = 'Checked ACME SSL certificates';
+        }
       }
     } catch (err) {
       exitCode = err.code || 1;
