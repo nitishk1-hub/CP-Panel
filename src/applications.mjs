@@ -218,6 +218,15 @@ export async function scanApplications() {
     });
   }
 
+  if (algoConfigs.length === 0) {
+    algoConfigs.push({
+      name: 'openalgo.service (systemd unit)',
+      path: '/etc/systemd/system/openalgo.service',
+      type: 'systemd',
+      size: (await fs.stat('/etc/systemd/system/openalgo.service').catch(() => ({ size: 0 }))).size
+    });
+  }
+
   applications.push({
     id: 'openalgo',
     name: 'OpenAlgo Trading Platform',

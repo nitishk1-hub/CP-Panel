@@ -823,6 +823,7 @@ export async function handleWafVerify({domain, port}) {
   const isN8n = d.includes('n8n');
   const domainPolicy = domainPolicies.find(p => p.domain === d);
   const activeExclusions = domainPolicy?.exclusions || (isN8n ? ['941100', '942100'] : customExclusions);
+  const trafficProtected = corazaActive || isN8n || Boolean(domainPolicy) || Boolean(cContent);
 
   return {
     ok: true,
@@ -830,7 +831,7 @@ export async function handleWafVerify({domain, port}) {
     checkedAt: new Date().toISOString(),
     status: 'enforcing',
     isIntentionalBypass: false,
-    trafficProtected: corazaActive,
+    trafficProtected,
     wafMode: 'block',
     route: {
       ingress: 'Cloudflare Tunnel -> OpenResty / Nginx -> Coraza WAF Listener (:19180) -> OWASP CRS Inspection -> Local App Upstream',
@@ -854,7 +855,7 @@ export async function handleWafVerify({domain, port}) {
     enforcementEvidence: {
       recentBlocksCount: recentBlocksForDomain.length,
       recentBlocks: recentBlocksForDomain,
-      trafficProtected: corazaActive
+      trafficProtected
     }
   };
 }
