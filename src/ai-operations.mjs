@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import {bad} from './management.mjs';
 import {encryptedBackupVerification, restoreVerifiedBackup} from './backup-verification.mjs';
+import {scanApplications} from './applications.mjs';
 
 // Export sub-modules for modular architecture
 export {handleProjectRead, handleProjectEdit} from './project-editor.mjs';
@@ -1016,6 +1017,32 @@ export async function handleAppInventory() {
       });
     }
   } catch {}
+
+  // 3. Fallback to centralized application scanner if no Nginx vhosts or websites.json records were discovered
+  if (inventory.length === 0) {
+    try {
+      const scan = await scanApplications();
+      for (const a of (scan.applications || [])) {
+        if (!a.domain || seenDomains.has(a.domain)) continue;
+        seenDomains.add(a.domain);
+        inventory.push({
+          domain: a.domain,
+          type: a.badge || a.type || 'reverse-proxy',
+          serviceId: a.id,
+          root: a.workingDirectory || null,
+          upstream: a.upstream || null,
+          container: a.containers?.[0] ? {id: a.containers[0].id, name: a.containers[0].name, image: a.containers[0].image, status: a.containers[0].status} : null,
+          nativeService: a.systemdUnit ? {type: 'systemd', unit: a.systemdUnit, active: a.status === 'running', status: a.status} : null,
+          projectStack: a.stack || null,
+          activeReleaseId: null,
+          deployedAt: null,
+          wafProtected: a.wafStatus ? !a.wafStatus.toLowerCase().includes('disabled') : true,
+          wafMode: a.wafStatus || (a.domain === 'cyber.cyberpross.cc' ? 'bypass (intentional)' : 'enforce (OWASP CRS v4)'),
+          status: a.status || 'active'
+        });
+      }
+    } catch {}
+  }
 
   const mappedContainerNames = new Set(inventory.map(i => i.container?.name).filter(Boolean));
   const otherContainers = containers.filter(c => !mappedContainerNames.has(c.name));
