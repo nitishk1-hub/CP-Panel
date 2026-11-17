@@ -8,25 +8,27 @@ import { createCronManager } from '../src/cron-manager.mjs';
 import { maskSecrets } from '../src/applications.mjs';
 import { maskKnownSecrets } from '../src/secret-manager.mjs';
 
-test('Security Hardening: Regex sanitization prevents CodeQL CWE-116 injection in domain matching', () => {
-  // Test domain strings containing regex metacharacters
-  const dangerousDomains = [
-    'app.test.com',
-    'app-staging.domain+test.org',
-    'test(1).example.com',
-    'bracket[sub].domain.io',
-    'wildcard*.test.net',
-    'caret^dollar$.example.org'
-  ];
-
-  for (const d of dangerousDomains) {
-    const escapedDomain = d.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
-    // Ensure regex compiles without syntax error and matches exact literal domain
-    const regex = new RegExp(`host\\s+${escapedDomain}\\b`);
-    assert.equal(regex.test(`host ${d}`), true);
-    // Metacharacters should not be interpreted as wildcards/groups
-    assert.equal(regex.test(`host ${d}_unmatched`), false);
+test('Security Hardening: Caddy host bypass parser uses safe token matching without RegExp', () => {
+  const sampleCaddyfile = `
+  route {
+    @panel_8d01af7fd4f5 host cyber.cyberpross.cc
+    handle @panel_8d01af7fd4f5 {
+      reverse_proxy http://127.0.0.2
+    }
+    handle {
+      coraza_waf
+    }
   }
+  `;
+  const tokens = sampleCaddyfile.split(/\s+/);
+  const checkBypass = d => tokens.some((t, i, arr) => t === 'host' && arr[i + 1] === d && arr[i - 1]?.startsWith('@panel'));
+
+  assert.equal(checkBypass('cyber.cyberpross.cc'), true);
+  assert.equal(checkBypass('algo.cyberpross.cc'), false);
+  assert.equal(checkBypass('evil-example'), false);
+  assert.equal(checkBypass('cyber.cyberpross.cc.evil'), false);
+  assert.equal(checkBypass('cyber.cyberpross.cc+evil'), false);
+  assert.equal(checkBypass('cyber.cyberpross.cc(test)'), false);
 });
 
 test('Security Hardening: Docker system prune cron task does not use --volumes to prevent data loss', async () => {
