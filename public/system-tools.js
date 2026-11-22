@@ -444,7 +444,7 @@ function updateFmSelectionBar(){
 }
 async function fileManagerPage(){
  fileDirectory='.';fmSelected.clear();
- $('#system-content').innerHTML=`<div class="card file-manager"><div class="fm-header-bar"><div class="fm-breadcrumbs-wrap"><div id="fm-breadcrumbs" class="fm-breadcrumbs"></div><button id="fm-toggle-direct-path" class="icon-button" title="Edit path as text">${icon('edit')}</button></div><div class="fm-header-actions"><input id="fm-search" type="search" placeholder="Filter files…" aria-label="Filter files"><button id="fm-refresh" class="icon-button" title="Refresh folder">${icon('refresh')}</button></div></div><form id="fm-location" class="file-location" hidden><span>${icon('folder')}</span><input id="fm-path" aria-label="Folder path relative to file root" value="." autocomplete="off"><button class="button secondary" type="submit">Go to folder</button><button id="fm-cancel-path" class="button secondary" type="button">Cancel</button></form><div class="fm-bookmarks-bar"><span class="fm-bm-label">Quick Jumps:</span>${FM_BOOKMARKS.map(b=>`<button class="fm-bm-pill" data-fm-path="${esc(b.path)}">${esc(b.label)}</button>`).join('')}</div><div class="file-toolbar"><div class="row-actions">${button('fm-parent','Parent','up')}${button('fm-new-folder','New folder','folder')}${button('fm-new-file','New file','plus')}${button('fm-upload','Upload','upload','primary')}${button('fm-remote-dl','Remote Download','globe')}${button('fm-compress-btn','Compress','archive')}${button('fm-trash','Trash Bin','trash')}</div></div><div class="file-drop-hint" id="fm-drop">Drop files here to upload · up to 100 MiB each</div><input id="fm-upload-input" type="file" multiple hidden><div id="fm-progress" role="status"></div><div id="fm-list"></div><div class="table-footer"><span id="fm-count"></span><span>Server root: ${esc(me.fileRoot)} · host user permissions</span></div></div>`;
+ $('#system-content').innerHTML=`<div class="card file-manager"><div class="fm-header-bar"><div class="fm-breadcrumbs-wrap"><div id="fm-breadcrumbs" class="fm-breadcrumbs"></div><button id="fm-toggle-direct-path" class="icon-button" title="Edit path as text">${icon('edit')}</button></div><div class="fm-header-actions"><input id="fm-search" type="search" placeholder="Filter files…" aria-label="Filter files"><button id="fm-refresh" class="icon-button" title="Refresh folder">${icon('refresh')}</button></div></div><form id="fm-location" class="file-location" hidden><span>${icon('folder')}</span><input id="fm-path" aria-label="Folder path relative to file root" value="." autocomplete="off"><button class="button secondary" type="submit">Go to folder</button><button id="fm-cancel-path" class="button secondary" type="button">Cancel</button></form><div class="fm-bookmarks-bar"><span class="fm-bm-label">Quick Jumps:</span>${FM_BOOKMARKS.map(b=>`<button class="fm-bm-pill" data-fm-path="${esc(b.path)}">${esc(b.label)}</button>`).join('')}</div><div class="file-toolbar"><div class="row-actions">${button('fm-parent','Parent','up')}${button('fm-new-folder','New folder','folder')}${button('fm-new-file','New file','plus')}${button('fm-upload','Upload','upload','primary')}${button('fm-remote-dl','Remote Download','globe')}${button('fm-compress-btn','Compress','archive')}${button('fm-trash','Trash Bin','trash')}</div></div><div class="file-drop-hint" id="fm-drop">Drop files here or click Upload · Direct streaming upload (no size limit)</div><input id="fm-upload-input" type="file" multiple hidden><div id="fm-progress" role="status"></div><div id="fm-list"></div><div class="table-footer"><span id="fm-count"></span><span>Server root: ${esc(me.fileRoot)} · host user permissions</span></div></div>`;
  bind('fm-parent',()=>browseFiles(fileDirectory.split('/').slice(0,-1).join('/')||'.'));
  bind('fm-refresh',()=>browseFiles(fileDirectory));
  bind('fm-toggle-direct-path',()=>{const loc=$('#fm-location');loc.hidden=!loc.hidden;if(!loc.hidden)$('#fm-path').focus();});
@@ -651,22 +651,326 @@ async function fileEditor(relative){
  });
  editorHandle.focus();
 }
-async function uploadFiles(files){
- for(const file of files){
-  $('#fm-progress').textContent='Uploading '+file.name+'…';
-  try{
-   await new Promise((resolve,reject)=>{
-    const xhr=new XMLHttpRequest();
-    xhr.open('POST','/api/files/upload?path='+encodeURIComponent(fileDirectory)+'&name='+encodeURIComponent(file.name));
-    xhr.setRequestHeader('X-Panel-Intent','manage');
-    xhr.upload.onprogress=e=>{if(e.lengthComputable)$('#fm-progress').textContent='Uploading '+file.name+' · '+Math.round(e.loaded/e.total*100)+'% ('+bytes(e.loaded)+' / '+bytes(e.total)+')';};
-    xhr.onload=()=>{let r;try{r=JSON.parse(xhr.responseText);}catch{}xhr.status<300?resolve():reject(Error(r?.error||'Upload failed'));};
-    xhr.onerror=()=>reject(Error('Upload connection failed'));
-    xhr.send(file);
-   });
-  }catch(e){notify(e.message);}
+window.PanelUploader = {
+ currentXhr: null,
+ isCancelled: false,
+
+ getCard() {
+  let card = document.getElementById('panel-upload-dock');
+  if (!card) {
+   card = document.createElement('div');
+   card.id = 'panel-upload-dock';
+   card.className = 'upload-floating-card';
+   card.setAttribute('role', 'region');
+   card.setAttribute('aria-label', 'File Upload Status');
+   card.hidden = true;
+   document.body.appendChild(card);
+  }
+  return card;
+ },
+
+ formatEta(seconds) {
+  if (!seconds || !isFinite(seconds) || seconds <= 0) return '—';
+  if (seconds < 60) return Math.ceil(seconds) + 's left';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.ceil(seconds % 60);
+  return mins + 'm ' + (secs < 10 ? '0' : '') + secs + 's left';
+ },
+
+ async uploadQueue({ files, getUrl, intent = 'manage', contentType, inlineStatusEl, onFileComplete, onAllComplete }) {
+  if (!files || !files.length) return;
+  const card = this.getCard();
+  card.hidden = false;
+  card.style.opacity = '1';
+  card.style.transform = 'translateY(0)';
+  this.isCancelled = false;
+
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+   try { Notification.requestPermission().catch(() => {}); } catch {}
+  }
+
+  const totalFiles = files.length;
+  let successCount = 0;
+
+  for (let i = 0; i < totalFiles; i++) {
+   if (this.isCancelled) break;
+   const file = files[i];
+   const url = getUrl(file);
+
+   card.innerHTML = `
+    <div class="upload-card-header">
+     <div class="upload-card-title-group">
+      <span class="upload-badge blue" id="pud-badge"><i class="upload-dot pulse"></i> Uploading</span>
+      <span class="upload-counter">${totalFiles > 1 ? `File ${i + 1} of ${totalFiles}` : '1 file'}</span>
+     </div>
+     <button type="button" class="upload-btn-cancel" id="pud-cancel">Cancel</button>
+    </div>
+    <div class="upload-card-body">
+     <div class="upload-file-row">
+      <span class="upload-filename" title="${esc(file.name)}">${esc(file.name)}</span>
+      <span class="upload-filesize">${bytes(file.size)}</span>
+     </div>
+     <div class="upload-bar-track">
+      <div class="upload-bar-fill" id="pud-fill" style="width: 0%"></div>
+     </div>
+     <div class="upload-stats-line">
+      <span id="pud-transferred">0 B / ${bytes(file.size)} (0%)</span>
+      <span id="pud-speed-eta"><span id="pud-speed">0 B/s</span> · <span id="pud-eta">Starting…</span></span>
+     </div>
+     <div class="upload-substatus" id="pud-sub">Direct streaming upload to server…</div>
+    </div>
+   `;
+
+   const badgeEl = card.querySelector('#pud-badge');
+   const fillEl = card.querySelector('#pud-fill');
+   const transferredEl = card.querySelector('#pud-transferred');
+   const speedEl = card.querySelector('#pud-speed');
+   const etaEl = card.querySelector('#pud-eta');
+   const subEl = card.querySelector('#pud-sub');
+   const cancelBtn = card.querySelector('#pud-cancel');
+
+   if (inlineStatusEl) {
+    inlineStatusEl.textContent = `Uploading ${file.name} (${bytes(file.size)})…`;
+   }
+   notify(`Uploading ${file.name} (${bytes(file.size)})…`);
+
+   let lastLoaded = 0;
+   let lastTime = Date.now();
+   let smoothedSpeed = 0;
+   let isStalled = false;
+   let stallTimer = null;
+   let fileCompleted = false;
+
+   const resetStallCheck = () => {
+    clearTimeout(stallTimer);
+    if (isStalled) {
+     isStalled = false;
+     badgeEl.className = 'upload-badge blue';
+     badgeEl.innerHTML = '<i class="upload-dot pulse"></i> Uploading';
+     fillEl.classList.remove('stalled');
+     subEl.className = 'upload-substatus';
+     subEl.textContent = 'Upload resumed · streaming to server';
+    }
+    stallTimer = setTimeout(() => {
+     if (!fileCompleted && !this.isCancelled) {
+      isStalled = true;
+      badgeEl.className = 'upload-badge amber';
+      badgeEl.innerHTML = '<i class="upload-dot"></i> Stalled / Paused';
+      fillEl.classList.add('stalled');
+      subEl.className = 'upload-substatus warning';
+      subEl.textContent = 'Upload stalled (no data transferred for 8s). Network or mobile screen lock may be pausing transfer.';
+      notify(`⚠️ Upload stalled for ${file.name} (network waiting)`);
+     }
+    }, 8000);
+   };
+
+   resetStallCheck();
+
+   const onOffline = () => {
+    if (!fileCompleted && !this.isCancelled) {
+     isStalled = true;
+     badgeEl.className = 'upload-badge amber';
+     badgeEl.innerHTML = '<i class="upload-dot"></i> Offline';
+     fillEl.classList.add('stalled');
+     subEl.className = 'upload-substatus warning';
+     subEl.textContent = 'Device is offline. Upload paused.';
+     notify(`⚠️ Device went offline during upload of ${file.name}`);
+    }
+   };
+   window.addEventListener('offline', onOffline);
+
+   try {
+    await new Promise((resolve, reject) => {
+     const xhr = new XMLHttpRequest();
+     this.currentXhr = xhr;
+
+     cancelBtn.onclick = () => {
+      this.isCancelled = true;
+      clearTimeout(stallTimer);
+      xhr.abort();
+      badgeEl.className = 'upload-badge red';
+      badgeEl.textContent = 'Cancelled';
+      fillEl.classList.add('failed');
+      subEl.className = 'upload-substatus error';
+      subEl.textContent = 'Upload cancelled by user.';
+      cancelBtn.textContent = 'Close';
+      cancelBtn.onclick = () => { card.hidden = true; };
+      notify(`Upload cancelled: ${file.name}`);
+      reject(Error('Upload cancelled'));
+     };
+
+     xhr.open('POST', url);
+     if (intent) xhr.setRequestHeader('X-Panel-Intent', intent);
+     if (contentType) xhr.setRequestHeader('Content-Type', contentType);
+
+     xhr.upload.onprogress = e => {
+      if (!e.lengthComputable || this.isCancelled) return;
+      resetStallCheck();
+
+      const now = Date.now();
+      const timeDelta = (now - lastTime) / 1000;
+      if (timeDelta >= 0.4) {
+       const bytesDelta = e.loaded - lastLoaded;
+       const instantSpeed = bytesDelta / timeDelta;
+       smoothedSpeed = smoothedSpeed === 0 ? instantSpeed : (smoothedSpeed * 0.65 + instantSpeed * 0.35);
+       lastLoaded = e.loaded;
+       lastTime = now;
+      }
+
+      const pct = Math.round((e.loaded / e.total) * 100);
+      const remaining = e.total - e.loaded;
+      const eta = smoothedSpeed > 0 ? Math.ceil(remaining / smoothedSpeed) : null;
+
+      fillEl.style.width = pct + '%';
+      transferredEl.textContent = `${bytes(e.loaded)} / ${bytes(e.total)} (${pct}%)`;
+      speedEl.textContent = `${bytes(smoothedSpeed)}/s`;
+      etaEl.textContent = this.formatEta(eta);
+
+      const progressMsg = `Uploading ${file.name} · ${pct}% (${bytes(e.loaded)} / ${bytes(e.total)})`;
+      if (inlineStatusEl) inlineStatusEl.textContent = progressMsg;
+
+      if (e.loaded >= e.total) {
+       clearTimeout(stallTimer);
+       badgeEl.className = 'upload-badge amber';
+       badgeEl.innerHTML = '<i class="upload-dot pulse"></i> Finalizing';
+       fillEl.classList.add('pulse');
+       etaEl.textContent = 'Syncing…';
+       subEl.className = 'upload-substatus';
+       subEl.textContent = '100% transferred. Server is committing and syncing to disk…';
+       if (inlineStatusEl) inlineStatusEl.textContent = `Processing ${file.name} on server…`;
+      }
+     };
+
+     xhr.onload = () => {
+      fileCompleted = true;
+      clearTimeout(stallTimer);
+      window.removeEventListener('offline', onOffline);
+      if (xhr.status >= 200 && xhr.status < 300) {
+       successCount++;
+       fillEl.style.width = '100%';
+       fillEl.className = 'upload-bar-fill complete';
+       badgeEl.className = 'upload-badge green';
+       badgeEl.textContent = '✓ Complete';
+       subEl.className = 'upload-substatus success';
+       subEl.textContent = `File saved successfully (${bytes(file.size)}).`;
+       cancelBtn.textContent = 'Close';
+       cancelBtn.onclick = () => { card.hidden = true; };
+
+       const successMsg = `✓ Upload complete: ${file.name} (${bytes(file.size)})`;
+       notify(successMsg);
+       if (inlineStatusEl) inlineStatusEl.textContent = successMsg;
+
+       if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.visibilityState === 'hidden') {
+        try {
+         new Notification('CP-Panel Upload Complete', {
+          body: `${file.name} (${bytes(file.size)}) uploaded successfully.`,
+          icon: '/favicon.ico'
+         });
+        } catch {}
+       }
+
+       if (onFileComplete) onFileComplete(file);
+       resolve();
+      } else {
+       let errMsg = 'Upload failed (HTTP ' + xhr.status + ')';
+       try {
+        const r = JSON.parse(xhr.responseText);
+        if (r?.error) errMsg = r.error;
+       } catch {}
+       badgeEl.className = 'upload-badge red';
+       badgeEl.textContent = 'Failed';
+       fillEl.classList.add('failed');
+       subEl.className = 'upload-substatus error';
+       subEl.textContent = errMsg;
+       cancelBtn.textContent = 'Close';
+       cancelBtn.onclick = () => { card.hidden = true; };
+
+       notify(`✗ Upload failed: ${errMsg}`);
+       if (inlineStatusEl) inlineStatusEl.textContent = `Upload failed: ${errMsg}`;
+
+       if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.visibilityState === 'hidden') {
+        try {
+         new Notification('CP-Panel Upload Failed', {
+          body: `${file.name}: ${errMsg}`,
+          icon: '/favicon.ico'
+         });
+        } catch {}
+       }
+
+       reject(Error(errMsg));
+      }
+     };
+
+     xhr.onerror = () => {
+      fileCompleted = true;
+      clearTimeout(stallTimer);
+      window.removeEventListener('offline', onOffline);
+      badgeEl.className = 'upload-badge red';
+      badgeEl.textContent = 'Connection Error';
+      fillEl.classList.add('failed');
+      subEl.className = 'upload-substatus error';
+      subEl.textContent = 'Upload connection was closed or interrupted.';
+      cancelBtn.textContent = 'Close';
+      cancelBtn.onclick = () => { card.hidden = true; };
+
+      const errText = `Upload stopped: connection error for ${file.name}`;
+      notify(errText);
+      if (inlineStatusEl) inlineStatusEl.textContent = errText;
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && document.visibilityState === 'hidden') {
+       try {
+        new Notification('CP-Panel Upload Interrupted', {
+         body: `${file.name}: Connection was closed or interrupted.`,
+         icon: '/favicon.ico'
+        });
+       } catch {}
+      }
+
+      reject(Error('Upload connection failed'));
+     };
+
+     xhr.onabort = () => {
+      fileCompleted = true;
+      clearTimeout(stallTimer);
+      window.removeEventListener('offline', onOffline);
+      reject(Error('Upload cancelled'));
+     };
+
+     xhr.send(file);
+    });
+   } catch (e) {
+    if (this.isCancelled) break;
+   } finally {
+    clearTimeout(stallTimer);
+    window.removeEventListener('offline', onOffline);
+    this.currentXhr = null;
+   }
+  }
+
+  if (onAllComplete) await onAllComplete();
+
+  if (successCount === totalFiles && !this.isCancelled) {
+   setTimeout(() => {
+    if (!this.currentXhr && card) {
+     card.style.opacity = '0';
+     card.style.transform = 'translateY(20px)';
+     setTimeout(() => { card.hidden = true; card.style.opacity = ''; card.style.transform = ''; }, 300);
+    }
+   }, 4500);
+  }
  }
- if($('#fm-progress')){$('#fm-progress').textContent='Upload complete.';await browseFiles(fileDirectory);}
+};
+async function uploadFiles(files){
+ await window.PanelUploader.uploadQueue({
+  files,
+  getUrl: file => '/api/files/upload?path=' + encodeURIComponent(fileDirectory) + '&name=' + encodeURIComponent(file.name),
+  intent: 'manage',
+  inlineStatusEl: $('#fm-progress'),
+  onAllComplete: async () => {
+   if ($('#fm-progress')) $('#fm-progress').textContent = 'Upload complete.';
+   await browseFiles(fileDirectory);
+  }
+ });
 }
 function hostAccessCard(h){return h.isRoot?`<div class="host-access-ready"><span>${icon('shield')} Administrator access</span>${pill('Active','green')}</div>`:`<div class="host-setup-banner"><span class="access-notice-icon">${icon('shield')}</span><div><strong>Administrator setup required</strong><p>Enable full server management with a one-time installation.</p></div>${h.setupSupported?button('host-admin-setup','Complete setup','arrow','primary'):pill('Linux + systemd required','amber')}</div>`;}
 function hostAdminSetup(h){openModal('Set up administrator service',`<form id="host-admin-form" class="modal-body"><p>This installs CP-Panel (by CyberPross) as a root-owned system service and restarts it. Your existing panel accounts will be kept; you will sign in again after the restart.</p><ul><li>Administrative service: <code>${esc(h.serviceName)}</code></li><li>Application files are protected from ordinary Linux users.</li><li>Panel administrators gain full access to the server.</li><li>Existing firewall rules are preserved.</li></ul>${passwordField('host-admin-password','Linux administrator password','current-password')}<p class="field-help">Use the password for the Linux account running this panel. It must have sudo permission. This password is used only for installation and is not saved.</p><label class="host-setup-check"><input id="host-admin-confirm" type="checkbox" required>I understand that panel administrators will have full access to this server.</label><p id="host-admin-progress" role="status"></p><p class="form-error" role="alert"></p><div class="form-actions"><button class="button" type="submit">Install and restart panel</button></div></form>`);togglePassword('host-admin-password');form('host-admin-form',async()=>{const password=$('#host-admin-password').value;$('#host-admin-password').value='';if(!$('#host-admin-confirm').checked)throw Error('Confirm administrator access before continuing.');$('#host-admin-progress').textContent='Authorizing and installing the service… This may take a minute.';try{const r=await post('/api/host/setup',{password,confirm:true});$('#host-admin-progress').textContent=r.output+'\nRestarting the panel…';let attempts=0;const reconnect=async()=>{try{const res=await fetch('/api/auth/options',{cache:'no-store'});if(res.ok&&attempts>5){location.reload();return;}}catch{}if(++attempts<90)setTimeout(reconnect,2000);else $('#host-admin-progress').textContent='The service was installed. Reload this page to reconnect, or check the service if it does not respond.';};setTimeout(reconnect,3000);}catch(e){$('#host-admin-progress').textContent='';throw e;}});}
