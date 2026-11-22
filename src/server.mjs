@@ -439,7 +439,7 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
         if(req.method==='GET'&&endpoint==='/existing/service-logs')return send(200,await websites.existing.serviceLogs(id,url.searchParams.get('lines')));
         if(req.method==='GET'&&endpoint==='/file')return send(200,await siteService.readFile(id,url.searchParams.get('path')));
         if(req.method==='GET'&&endpoint==='/download'){await (await siteService.files(id)).download(url.searchParams.get('path')||'.',res);return;}
-        if(req.method==='POST'&&endpoint==='/upload'){const fm=await siteService.files(id);const name=url.searchParams.get('name'),relative=url.searchParams.get('path')||'.';const result=await fm.upload(req,relative,name);await audit('website.file.uploaded');return send(201,result);}
+        if(req.method==='POST'&&endpoint==='/upload'){req.setTimeout(0);res.setTimeout(0);const fm=await siteService.files(id);const name=url.searchParams.get('name'),relative=url.searchParams.get('path')||'.';const result=await fm.upload(req,relative,name);await audit('website.file.uploaded');return send(201,result);}
         if(req.method==='POST'){const b=await body(req);
           if(endpoint==='/file'){const result=await (isExisting(b.id)?websites.existing:websites).saveFile(b.id,b);await audit('website.file.saved');return send(200,result);}
           if(endpoint==='/files'){const result=await (await (isExisting(b.id)?websites.existing:websites).files(b.id)).mutate(b.action==='restore'?{...b,id:b.idToRestore}:b);await audit('website.file.'+b.action);return send(200,result);}
@@ -512,7 +512,7 @@ export async function createPanel({dataDir=process.env.PANEL_DATA_DIR||path.join
       if(req.method==='GET'&&url.pathname==='/api/files/list'){admin();return send(200,await fileManager.listing(url.searchParams.get('path')||'.'));}
       if(req.method==='GET'&&url.pathname==='/api/files/trash'){admin();return send(200,await fileManager.trash());}
       if(req.method==='POST'&&url.pathname==='/api/files/manage'){admin();const b=await body(req);const result=await fileManager.mutate(b);await audit('file.'+b.action);return send(200,result);}
-      if(req.method==='POST'&&url.pathname==='/api/files/upload'){admin();const result=await fileManager.upload(req,url.searchParams.get('path')||'.',url.searchParams.get('name'));await audit('file.uploaded');return send(201,result);}
+      if(req.method==='POST'&&url.pathname==='/api/files/upload'){admin();req.setTimeout(0);res.setTimeout(0);const result=await fileManager.upload(req,url.searchParams.get('path')||'.',url.searchParams.get('name'));await audit('file.uploaded');return send(201,result);}
       if(req.method==='GET'&&url.pathname==='/api/files/download'){admin();await fileManager.download(url.searchParams.get('path')||'.',res,url.searchParams.get('inline')==='1');return;}
       if(url.pathname==='/api/files'){admin();const file=await confined(fileRoot,url.searchParams.get('path')||'.');if(req.method==='GET'){const stat=await fs.stat(file);if(stat.isDirectory())return send(200,await fileManager.listing(url.searchParams.get('path')||'.'));return send(200,{directory:false,...await readText(file)});}if(req.method==='POST'){const b=await body(req);const result=await saveText(file,b.text,b.revision);await audit('file.saved');return send(200,result);}}
 

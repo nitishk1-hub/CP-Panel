@@ -180,11 +180,10 @@ export function createFileManager({fileRoot,dataDir}){
  }
  async function upload(request,parent,filename){
   const target=await destination(parent,filename),anchor=await anchoredParent(target),temporary=anchor.directory+'/.panel-upload-'+crypto.randomUUID();
-  let size=0,handle;const limit=100*1024*1024;
+  let size=0,handle;
   try{
-   if(Number(request.headers['content-length'])>limit)throw bad('Uploads are limited to 100 MiB',413);
    handle=await fs.open(temporary,'wx',0o600);
-   await pipeline(request,new Transform({transform(chunk,encoding,callback){size+=chunk.length;callback(size>limit?bad('Upload exceeds 100 MiB',413):null,chunk);}}),createWriteStream(`/proc/self/fd/${handle.fd}`,{flags:'r+',start:0}));
+   await pipeline(request,new Transform({transform(chunk,encoding,callback){size+=chunk.length;callback(null,chunk);}}),createWriteStream(`/proc/self/fd/${handle.fd}`,{flags:'r+',start:0}));
    await handle.sync();await linkRetained(handle,anchor);await anchor.handle.sync();return {uploaded:true,size};
   }finally{await handle?.close();await fs.rm(temporary,{force:true});await anchor.close();}
  }

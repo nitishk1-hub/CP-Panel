@@ -653,14 +653,13 @@ async function fileEditor(relative){
 }
 async function uploadFiles(files){
  for(const file of files){
-  if(file.size>100*1024*1024){notify(file.name+' exceeds the 100 MiB upload limit.');continue;}
   $('#fm-progress').textContent='Uploading '+file.name+'…';
   try{
    await new Promise((resolve,reject)=>{
     const xhr=new XMLHttpRequest();
     xhr.open('POST','/api/files/upload?path='+encodeURIComponent(fileDirectory)+'&name='+encodeURIComponent(file.name));
     xhr.setRequestHeader('X-Panel-Intent','manage');
-    xhr.upload.onprogress=e=>{if(e.lengthComputable)$('#fm-progress').textContent='Uploading '+file.name+' · '+Math.round(e.loaded/e.total*100)+'%';};
+    xhr.upload.onprogress=e=>{if(e.lengthComputable)$('#fm-progress').textContent='Uploading '+file.name+' · '+Math.round(e.loaded/e.total*100)+'% ('+bytes(e.loaded)+' / '+bytes(e.total)+')';};
     xhr.onload=()=>{let r;try{r=JSON.parse(xhr.responseText);}catch{}xhr.status<300?resolve():reject(Error(r?.error||'Upload failed'));};
     xhr.onerror=()=>reject(Error('Upload connection failed'));
     xhr.send(file);
