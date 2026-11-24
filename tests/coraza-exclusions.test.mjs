@@ -12,11 +12,21 @@ test('Coraza configuration renders domain rule exclusions with SecRuleRemoveById
         domain: 'n8n.cyberpross.cc',
         mode: 'block',
         exclusions: ['942100', '920272']
+      },
+      {
+        domain: 'algo.cyberpross.cc',
+        mode: 'block',
+        exclusions: ['920440', '941100']
       }
-    ]
+    ],
+    allowlist: ['198.46.159.138', '10.77.42.0/24']
   });
 
   assert(caddyfile.includes('host n8n.cyberpross.cc'));
   assert(caddyfile.includes('SecRuleRemoveById 942100'));
   assert(caddyfile.includes('SecRuleRemoveById 920272'));
+  assert(caddyfile.includes('host algo.cyberpross.cc'));
+  assert(caddyfile.includes('SecRuleRemoveById 920440'));
+  assert(caddyfile.includes('SecRequestBodyLimitAction ProcessPartial'));
+  assert(caddyfile.includes('@ipMatch 198.46.159.138,10.77.42.0/24'));
 });
